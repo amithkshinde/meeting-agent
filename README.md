@@ -2,7 +2,18 @@
 
 A floating Mac agent that notices when you join a call, records and transcribes it, and coaches you live using what was said in earlier conversations with the same client.
 
-**Status:** planning. The product requirements are written; no code yet.
+**Status:** Phase 0 spike. The first build detects calls and records screen and audio. It has not been compiled or run yet. Transcription, memory and suggestions are not built.
+
+## Try the spike
+
+Needs a Mac on macOS 15 or later with Xcode 16 or the Swift toolchain.
+
+```bash
+scripts/build-app.sh
+open build/MeetingAgent.app
+```
+
+Then follow the [spike test plan](docs/SPIKE.md).
 
 ## What it will do
 
@@ -15,6 +26,7 @@ A floating Mac agent that notices when you join a call, records and transcribes 
 
 ## Docs
 
+- [Spike test plan](docs/SPIKE.md): how to build the spike, what to check on real calls, known limits.
 - [Product requirements (PRD)](docs/PRD.md): goals, scenarios, requirements, UX, technical approach, privacy and legal, phasing, risks and open questions.
 
 ## Planned approach
