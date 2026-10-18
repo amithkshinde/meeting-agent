@@ -26,6 +26,7 @@ final class AudioTrackWriter {
     private let name: String
     private let queue: DispatchQueue
     private var file: AVAudioFile?
+    var onBuffer: ((AVAudioPCMBuffer) -> Void)?
 
     init(url: URL, name: String) {
         self.url = url
@@ -37,6 +38,7 @@ final class AudioTrackWriter {
         queue.async { [self] in
             guard sampleBuffer.isValid, CMSampleBufferGetNumSamples(sampleBuffer) > 0,
                   let buffer = Self.pcmBuffer(from: sampleBuffer) else { return }
+            onBuffer?(buffer)
             do {
                 if file == nil {
                     let format = buffer.format
@@ -91,6 +93,7 @@ final class CallRecorder: NSObject, SCStreamDelegate, SCStreamOutput, SCRecordin
 
     /// Called if capture stops without the user asking, for example when the display sleeps.
     var onUnexpectedStop: ((String) -> Void)?
+    var transcriber: LiveTranscriber?
 
     private var stream: SCStream?
     private var recordingOutput: SCRecordingOutput?
@@ -98,6 +101,7 @@ final class CallRecorder: NSObject, SCStreamDelegate, SCStreamOutput, SCRecordin
     private var micTrack: AudioTrackWriter?
     private var meta: Meta?
     private(set) var folder: URL?
+    private var stopping = false
 
     private let sampleQueue = DispatchQueue(label: "meetingagent.samples")
 
@@ -118,6 +122,8 @@ final class CallRecorder: NSObject, SCStreamDelegate, SCStreamOutput, SCRecordin
 
         let folder = try Self.makeFolder(for: call)
         self.folder = folder
+        // This file exists only while a recording is open. If the app is killed, it is how the next launch knows.
+        try? "recording".write(to: folder.appendingPathComponent("recording.lock"), atomically: true, encoding: .utf8)
 
         // Cap the picture at 1080 lines and a low frame rate to keep CPU use down.
         let scale = min(1.0, 1080.0 / Double(display.height))
@@ -139,6 +145,8 @@ final class CallRecorder: NSObject, SCStreamDelegate, SCStreamOutput, SCRecordin
         let mic = AudioTrackWriter(url: folder.appendingPathComponent("mic.m4a"), name: "mic")
         systemTrack = system
         micTrack = mic
+        system.onBuffer = { [weak self] buffer in self?.transcriber?.appendSystem(buffer) }
+        mic.onBuffer = { [weak self] buffer in self?.transcriber?.appendMic(buffer) }
 
         try stream.addStreamOutput(self, type: .screen, sampleHandlerQueue: sampleQueue)
         try stream.addStreamOutput(self, type: .audio, sampleHandlerQueue: sampleQueue)
@@ -154,6 +162,7 @@ final class CallRecorder: NSObject, SCStreamDelegate, SCStreamOutput, SCRecordin
 
         meta = Meta(app: call.app, windowTitle: call.windowTitle, started: Date(), ended: nil)
         try await stream.startCapture()
+        transcriber?.begin(folder: folder)
         self.stream = stream
         Log.write("recording started: \(folder.path)")
     }
@@ -161,18 +170,25 @@ final class CallRecorder: NSObject, SCStreamDelegate, SCStreamOutput, SCRecordin
     /// Stops capture, closes the files and returns the folder they were saved in.
     @discardableResult
     func stop() async -> URL? {
-        guard let stream else { return nil }
+        guard let stream, !stopping else { return nil }
+        stopping = true
         self.stream = nil
 
-        if let output = recordingOutput {
-            try? stream.removeRecordingOutput(output)
-        }
         do {
             try await stream.stopCapture()
         } catch {
             Log.write("stopCapture reported: \(error.localizedDescription)")
         }
+        // Give the MP4 writer a moment to finish the file.
+        try? await Task.sleep(nanoseconds: 1_500_000_000)
 
+        finalizeFiles()
+        stopping = false
+        return folder
+    }
+
+    private func finalizeFiles() {
+        transcriber?.end()
         systemTrack?.close()
         micTrack?.close()
         systemTrack = nil
@@ -189,8 +205,8 @@ final class CallRecorder: NSObject, SCStreamDelegate, SCStreamOutput, SCRecordin
             }
         }
         meta = nil
-        Log.write("recording stopped: \(folder?.path ?? "?")")
-        return folder
+        if let folder { try? FileManager.default.removeItem(at: folder.appendingPathComponent("recording.lock")) }
+        Log.write("recording files closed: \(folder?.path ?? "?")")
     }
 
     // MARK: - SCStreamOutput
@@ -209,7 +225,15 @@ final class CallRecorder: NSObject, SCStreamDelegate, SCStreamOutput, SCRecordin
     // MARK: - SCStreamDelegate
 
     func stream(_ stream: SCStream, didStopWithError error: Error) {
-        Log.write("stream stopped with error: \(error.localizedDescription)")
+        // macOS can send this while we are stopping on purpose. Only treat it as a problem if the
+        // stream was still meant to be running.
+        guard !stopping, self.stream != nil else {
+            Log.write("ignored stream-stop notice during normal stop: \(error.localizedDescription)")
+            return
+        }
+        Log.write("stream stopped unexpectedly: \(error.localizedDescription)")
+        self.stream = nil
+        finalizeFiles()
         onUnexpectedStop?(error.localizedDescription)
     }
 

@@ -1,52 +1,75 @@
 # Meeting Agent
 
-A floating Mac agent that notices when you join a call, records and transcribes it, and coaches you live using what was said in earlier conversations with the same client.
+A floating Mac agent that notices when you join a call, records and transcribes it, coaches you live using what was said in earlier conversations, and keeps everything organised by project so you can ask questions about all of it later.
 
-**Status:** Phase 0 spike. The first build detects calls and records screen and audio. It has not been compiled or run yet. Transcription, memory and suggestions are not built.
+Built by Amith K Shinde. Native macOS app in Swift and SwiftUI.
 
-## Try the spike
+## Install (no Terminal needed)
 
-Needs a Mac on macOS 15 or later with Xcode 16 or the Swift toolchain.
+1. Download or clone this folder.
+2. Double-click **Install Meeting Agent.command**. The first time, right-click it and choose Open.
+3. Wait for "Built". The app opens by itself.
+4. Follow the checklist on the Home screen (Screen Recording, Microphone, Speech Recognition, AI key).
+
+Needs macOS 15 or later (macOS 26 recommended for the better speech engine and the on-device AI). To build by hand:
 
 ```bash
+cd ~/Desktop/meeting-agent-main
 scripts/build-app.sh
 open build/MeetingAgent.app
 ```
 
-Then follow the [spike test plan](docs/SPIKE.md).
+## What it does
 
-## What it will do
+**During a call**
+- Detects Meet, Teams, Zoom and other calls, including ones that were never on your calendar, and offers to record.
+- Records screen, call audio and your microphone to your Mac, with no bot joining the call.
+- Live transcript (English, Hindi, Kannada and others), with "You" and "Them" labels.
+- Live recap and cards: a question to ask, a point to push back on, or a flag. Each card says where it comes from.
+- Catch me up and Last minute buttons, and a chat you can ask anything.
+- Quiet mode hides suggestions until you peek.
+- Global shortcuts (Control + Option): **M** show or hide the window, **A** ask a question, **S** peek at suggestions, **R** start or stop recording.
 
-- **Detects calls on its own.** Google Meet, Teams, Zoom and others, including calls that were never on your calendar, by watching for call apps and call cues on screen.
-- **Records everything locally.** Screen, your microphone and the other participants' audio, saved on your Mac with no meeting bot joining the call.
-- **Transcribes live.** A running transcript with "you" and "them" labels.
-- **Coaches you while the client speaks.** Short cards with a question to ask, a point to push back on, or a contradiction with something said in an earlier call, always with the source.
-- **Keeps you oriented.** A recap strip with the last few points, a "Catch me up" button for when you drift off, and an alert when someone asks you a question you haven't answered.
-- **Remembers every client.** Per-client memory across calls, a pre-call brief, and a summary with action items after each call.
+**After a call**
+- Transcript clean-up pass for Hindi, Hinglish and names (the original is kept too).
+- Summary with decisions, action items and open questions.
+- Promises are pulled out automatically into one list: what you owe, and what others owe you, with due dates.
+- Draft a follow-up email in one click. It opens in your mail app and nothing is sent for you.
+- Interrupted calls (crash, restart, sleep) are recovered on the next launch.
 
-## Docs
+**Projects and memory**
+- A project holds calls, files, emails and notes, plus an AI-written brief.
+- Ask questions across a project. Every answer lists the exact call, file or email it came from, with an Open button.
+- Live suggestions use everything in the project, including open promises.
 
-- [Spike test plan](docs/SPIKE.md): how to build the spike, what to check on real calls, known limits.
-- [Product requirements (PRD)](docs/PRD.md): goals, scenarios, requirements, UX, technical approach, privacy and legal, phasing, risks and open questions.
+**Calendar**
+- Connect the Mac's Calendar (Google Calendar works once your Google account is added in System Settings > Internet Accounts).
+- A briefing appears a few minutes before each meeting: last time, open promises, questions to ask.
+- The calendar invite names the people on the call and files the call under the right project.
 
-## Planned approach
+**Privacy**
+- Recordings, transcripts and notes stay on your Mac, in Movies > MeetingAgent.
+- Only text is ever sent to the AI, never audio or video. The key is kept in the macOS Keychain.
+- Choose "On this Mac only" in Settings, or per project, to use Apple's on-device model so nothing leaves the Mac. Projects marked this way are also kept out of cloud searches.
+- Tell people on the call that you are recording. Laws on recording differ by place.
 
-Native macOS app in Swift and SwiftUI, running as a menu bar agent with a floating window. Screen and audio capture through ScreenCaptureKit and Core Audio, on-device transcription, a local SQLite store with a vector index for memory, and a language model for suggestions that only ever sees short text snippets. Distributed as a signed, notarized direct download. The API choices in the PRD are to be confirmed in a short spike first.
+## AI key
+
+The cloud AI uses either a free Google Gemini key (https://aistudio.google.com/apikey) or an Anthropic key. Paste it in Settings. Free Google keys may let Google use what you send to improve its products, so use a paid key or the on-device option for confidential work.
+
+## Project layout
+
+- `Sources/MeetingAgent`: the app. `AppDelegate` wires everything; `CallDetector`, `CallRecorder`, `LiveTranscriber` and `ModernTranscriber` handle calls, capture and speech; `PostCall` writes notes and promises; `CalendarService` does briefings; `Knowledge` holds projects and retrieval; `MainView`, `ProjectPage`, `PromisesView`, `SettingsView` and `PanelView` are the screens.
+- `scripts/`: `build-app.sh`, `install.sh`, `setup-signing.sh` (a stable signing certificate so macOS keeps your permissions between builds).
+- `docs/`: [Product requirements](docs/PRD.md) and the [original spike test plan](docs/SPIKE.md).
+
+## Known limits
+
+- Speaker labels are "You" and "Them". Names from the calendar are used only when the invite makes it clear who is who.
+- Hindi and Hinglish accuracy depends on Apple's on-device recogniser; the clean-up pass helps but is not perfect. Kannada support varies by Mac.
+- Direct Gmail import is not built. In Gmail, download an email (⋮ > Download message) and drag the .eml file onto a project.
+- The on-device AI has a small context window, so answers are shorter and long calls are trimmed.
 
 ## Roadmap
 
-| Phase | Focus |
-| --- | --- |
-| 0. Spike | Prove call detection and capture on a real Mac across Meet, Teams and Zoom |
-| 1. Recorder MVP | Floating window, auto start and stop, live transcript, recap and Catch me up, post-call summary |
-| 2. Memory | Per-client store, calendar link, pre-call brief, search |
-| 3. Live copilot | Ask, Push back and Flag cards with sources |
-| 4. Polish | Onboarding, installer, Hindi support, export |
-
-## Privacy and consent
-
-Recording laws vary by country and state, and some require every participant's consent. The app is designed around a consent mode (announce by default), a visible recording indicator, local-first storage, one-click delete, and a never-record list. Get legal advice before recording real client calls.
-
-## Author
-
-Amith K Shinde
+Direct Gmail sync, per-speaker voice separation, export and delete tools, notarized distribution.

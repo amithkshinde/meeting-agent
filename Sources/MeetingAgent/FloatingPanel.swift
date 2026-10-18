@@ -15,6 +15,7 @@ final class FloatingPanel: NSPanel {
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         isMovableByWindowBackground = true
         hidesOnDeactivate = false
+        becomesKeyOnlyIfNeeded = true
         backgroundColor = .clear
         isOpaque = false
         hasShadow = true
@@ -22,8 +23,28 @@ final class FloatingPanel: NSPanel {
         contentView = content
     }
 
-    override var canBecomeKey: Bool { false }
+    override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
+
+    /// A floating panel isn't part of the main menu's responder flow, so copy, paste and friends
+    /// would do nothing in its text fields. Route the usual shortcuts to whatever is being edited.
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if event.type == .keyDown,
+           event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command,
+           let key = event.charactersIgnoringModifiers?.lowercased() {
+            var action: Selector?
+            switch key {
+            case "v": action = #selector(NSText.paste(_:))
+            case "c": action = #selector(NSText.copy(_:))
+            case "x": action = #selector(NSText.cut(_:))
+            case "a": action = #selector(NSText.selectAll(_:))
+            case "z": action = Selector(("undo:"))
+            default: break
+            }
+            if let action, NSApp.sendAction(action, to: nil, from: self) { return true }
+        }
+        return super.performKeyEquivalent(with: event)
+    }
 
     /// Places the panel at the top right of the main screen.
     func moveToTopRight() {

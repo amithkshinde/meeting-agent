@@ -7,7 +7,16 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-IDENTITY="${1:--}"
+IDENTITY="${1:-}"
+if [ -z "$IDENTITY" ]; then
+  if security find-identity -p codesigning | grep -q "Meeting Agent Dev"; then
+    IDENTITY="Meeting Agent Dev"
+  else
+    IDENTITY="-"
+    echo "WARNING: no stable certificate found. Run scripts/setup-signing.sh once, or macOS will forget permissions on every build."
+  fi
+fi
+echo "Signing with: $IDENTITY"
 APP="build/MeetingAgent.app"
 
 swift build -c release
@@ -16,6 +25,20 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp ".build/release/MeetingAgent" "$APP/Contents/MacOS/MeetingAgent"
 cp "Resources/Info.plist" "$APP/Contents/Info.plist"
+
+# App icon: turn Resources/AppIcon.png into an .icns file (skipped quietly if the tools are missing).
+if [ -f "Resources/AppIcon.png" ] && command -v sips >/dev/null 2>&1 && command -v iconutil >/dev/null 2>&1; then
+  ICONSET="build/AppIcon.iconset"
+  rm -rf "$ICONSET"
+  mkdir -p "$ICONSET"
+  for size in 16 32 128 256 512; do
+    sips -z $size $size "Resources/AppIcon.png" --out "$ICONSET/icon_${size}x${size}.png" >/dev/null
+    double=$((size * 2))
+    sips -z $double $double "Resources/AppIcon.png" --out "$ICONSET/icon_${size}x${size}@2x.png" >/dev/null
+  done
+  iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/AppIcon.icns" || echo "Icon step skipped."
+  rm -rf "$ICONSET"
+fi
 
 codesign --force --sign "$IDENTITY" "$APP"
 

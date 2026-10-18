@@ -12,20 +12,19 @@ enum CallState: Equatable {
     case active(DetectedCall)
 }
 
-/// Spots a call in progress without a calendar event or a known link.
+/// Spots a call in progress, and notices when it is over.
 ///
-/// Two signals are combined: is the default microphone running somewhere on the system, and does an
-/// on-screen window look like a call. Window titles of other apps are only readable once the app has
-/// Screen Recording permission, so detection improves after the first permission grant.
+/// A call counts as live only when both are true: a window looks like a call, and some other app is
+/// using the microphone. The second part matters for ending: after you leave a Meet call the tab
+/// title can stay the same, but the browser lets go of the microphone.
 ///
-/// Known limits of this first version: a browser only exposes its active tab's title, and a call
-/// window that is minimised or on another Space is not seen. Reading the browser URL and the call
-/// controls on screen are planned follow-ups.
+/// Known limits: a browser only exposes its active tab's title, and a call window that is minimised
+/// or on another Space is not seen. If you stay muted for a long time and the app lets go of the
+/// microphone, the recording can stop early; use "Record now" to start again.
 final class CallDetector {
     var onChange: ((CallState) -> Void)?
 
-    /// Set while recording. The microphone is then held by this app, so it no longer says anything
-    /// about whether the call is still going.
+    /// Set while recording. Used only when the per-app microphone check is unavailable.
     var isRecording = false
 
     private(set) var state: CallState = .idle
@@ -33,8 +32,8 @@ final class CallDetector {
     private var hits = 0
     private var misses = 0
 
-    private let startAfterHits = 2   // about 3 s of agreement before announcing a call
-    private let endAfterMisses = 3   // about 4.5 s of silence before calling it over
+    private let startAfterHits = 2    // about 3 s of agreement before announcing a call
+    private let endAfterMisses = 14   // about 20 s without a live call before calling it over
 
     func start() {
         timer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
@@ -48,8 +47,9 @@ final class CallDetector {
     }
 
     private func tick() {
-        let micOn = isRecording || Self.microphoneInUse()
-        if let call = Self.findCallWindow(micOn: micOn) {
+        let micOn = Self.microphoneActive(isRecording: isRecording)
+        let call = Self.findCallWindow(micOn: micOn)
+        if let call, micOn {
             hits += 1
             misses = 0
             if hits >= startAfterHits, state == .idle {
@@ -62,7 +62,7 @@ final class CallDetector {
             hits = 0
             if misses >= endAfterMisses, state != .idle {
                 state = .idle
-                Log.write("call ended (no call window for \(endAfterMisses) checks)")
+                Log.write("call ended (no live call for \(endAfterMisses) checks; mic: \(micOn), window: \(call != nil))")
                 onChange?(state)
             }
         }
@@ -70,7 +70,55 @@ final class CallDetector {
 
     // MARK: - Signals
 
-    /// True when the default input device is being used by any process.
+    /// Is anything other than this app using the microphone right now?
+    static func microphoneActive(isRecording: Bool) -> Bool {
+        if let other = otherProcessUsingInput() { return other }
+        // The per-app check is unavailable. While recording we hold the microphone ourselves, so
+        // the device-level check would never say "off"; assume on and rely on the window instead.
+        return isRecording ? true : microphoneInUse()
+    }
+
+    /// True when any process other than this one is capturing audio input. Nil if macOS won't tell us.
+    static func otherProcessUsingInput() -> Bool? {
+        let system = AudioObjectID(kAudioObjectSystemObject)
+        var listAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyProcessObjectList,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var size: UInt32 = 0
+        guard AudioObjectGetPropertyDataSize(system, &listAddress, 0, nil, &size) == noErr else { return nil }
+        let count = Int(size) / MemoryLayout<AudioObjectID>.size
+        var ids = [AudioObjectID](repeating: 0, count: count)
+        guard AudioObjectGetPropertyData(system, &listAddress, 0, nil, &size, &ids) == noErr else { return nil }
+
+        let me = getpid()
+        for id in ids {
+            var pidAddress = AudioObjectPropertyAddress(
+                mSelector: kAudioProcessPropertyPID,
+                mScope: kAudioObjectPropertyScopeGlobal,
+                mElement: kAudioObjectPropertyElementMain
+            )
+            var pid: pid_t = 0
+            var pidSize = UInt32(MemoryLayout<pid_t>.size)
+            guard AudioObjectGetPropertyData(id, &pidAddress, 0, nil, &pidSize, &pid) == noErr, pid != me else {
+                continue
+            }
+            var inputAddress = AudioObjectPropertyAddress(
+                mSelector: kAudioProcessPropertyIsRunningInput,
+                mScope: kAudioObjectPropertyScopeGlobal,
+                mElement: kAudioObjectPropertyElementMain
+            )
+            var running: UInt32 = 0
+            var runningSize = UInt32(MemoryLayout<UInt32>.size)
+            if AudioObjectGetPropertyData(id, &inputAddress, 0, nil, &runningSize, &running) == noErr, running != 0 {
+                return true
+            }
+        }
+        return false
+    }
+
+    /// True when the default input device is being used by any process (including this one).
     static func microphoneInUse() -> Bool {
         var address = AudioObjectPropertyAddress(
             mSelector: kAudioHardwarePropertyDefaultInputDevice,
@@ -95,6 +143,16 @@ final class CallDetector {
         for window in onScreenWindows() where window.layer == 0 {
             if let app = classify(owner: window.owner, title: window.title, micOn: micOn) {
                 return DetectedCall(app: app, windowTitle: window.title)
+            }
+        }
+        // Without Screen Recording permission macOS hides other apps' window titles. Fall back to
+        // "the microphone is on and a call app or browser is in front".
+        if micOn, !CGPreflightScreenCaptureAccess(),
+           let front = NSWorkspace.shared.frontmostApplication?.localizedName {
+            let o = front.lowercased()
+            let known = browsers + ["zoom", "microsoft teams", "slack", "facetime", "webex"]
+            if known.contains(where: { o.contains($0) }) {
+                return DetectedCall(app: "\(front) call", windowTitle: "(window titles hidden: Screen Recording is off)")
             }
         }
         return nil
