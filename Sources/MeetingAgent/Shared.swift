@@ -69,42 +69,7 @@ struct SetupStatus: Equatable {
 }
 
 // MARK: - Look and feel
-
-extension View {
-    /// A soft rounded card.
-    func card(padding: CGFloat = 14) -> some View {
-        self
-            .padding(padding)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-    }
-}
-
-struct PrimaryButtonStyle: ButtonStyle {
-    var destructive = false
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.callout.weight(.semibold))
-            .foregroundColor(.white)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 7)
-            .background(
-                (destructive ? Color.red : Color.accentColor).opacity(configuration.isPressed ? 0.75 : 1),
-                in: RoundedRectangle(cornerRadius: 9, style: .continuous)
-            )
-    }
-}
-
-struct SoftButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.callout)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(Color.primary.opacity(configuration.isPressed ? 0.14 : 0.08), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-    }
-}
+// Cards, buttons and the brand colours live in Theme.swift.
 
 /// A small label with an icon, used for project names and counts.
 struct Chip: View {
@@ -186,7 +151,7 @@ struct SourceListView: View {
                             .foregroundColor(.white)
                             .padding(.horizontal, 5)
                             .padding(.vertical, 2)
-                            .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 4))
+                            .background(Theme.accent, in: RoundedRectangle(cornerRadius: 4))
                         VStack(alignment: .leading, spacing: 1) {
                             Text(source.label).font(compact ? .caption : .callout).bold()
                             if !source.detail.isEmpty {
@@ -210,7 +175,7 @@ struct SourceListView: View {
             }
             .padding(compact ? 8 : 10)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.accentColor.opacity(0.07), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .background(Theme.accent.opacity(0.07), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
     }
 

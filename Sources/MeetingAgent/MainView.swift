@@ -17,6 +17,7 @@ struct MainView: View {
             detail
         }
         .frame(minWidth: 940, minHeight: 600)
+        .tint(Theme.accent)
         .onAppear { model.reload() }
         .sheet(isPresented: $showNewProject) {
             NameSheet(
@@ -33,7 +34,7 @@ struct MainView: View {
             CallDetailSheet(model: model, call: call)
         }
         .sheet(isPresented: Binding(get: { !onboarded }, set: { _ in })) {
-            OnboardingSheet { onboarded = true }
+            OnboardingSheet(model: model) { onboarded = true }
                 .interactiveDismissDisabled()
         }
     }
@@ -168,9 +169,9 @@ struct CallRow: View {
         Button(action: onOpen) {
             HStack(alignment: .top, spacing: 12) {
                 Image(systemName: "video.fill")
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(Theme.accent)
                     .frame(width: 28, height: 28)
-                    .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                    .background(Theme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
                 VStack(alignment: .leading, spacing: 2) {
                     Text("\(call.title ?? "\(call.app) call") · \(call.date.formatted(date: .abbreviated, time: .shortened))")
                         .font(.callout.weight(.semibold))
@@ -186,7 +187,7 @@ struct CallRow: View {
                     if call.client == MemoryStore.unassigned {
                         Chip(text: "Needs a project", icon: "questionmark.circle", tint: .orange)
                     } else {
-                        Chip(text: call.client, icon: "folder", tint: .accentColor)
+                        Chip(text: call.client, icon: "folder", tint: Theme.accent)
                     }
                 }
                 Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
@@ -208,8 +209,8 @@ struct HomeView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Welcome to Meeting Agent").font(.largeTitle.bold())
-                    Text("Record a call, get notes automatically, and ask anything about it later.")
+                    Text(Theme.greeting).font(.system(size: 30, weight: .bold))
+                    Text(subtitle)
                         .font(.title3)
                         .foregroundStyle(.secondary)
                 }
@@ -246,49 +247,80 @@ struct HomeView: View {
         }
     }
 
+    private var subtitle: String {
+        if case .recording = agent.state { return "A call is being recorded." }
+        if model.overdueCount > 0 {
+            return "You have \(model.overdueCount) overdue promise\(model.overdueCount == 1 ? "" : "s")."
+        }
+        if model.openMineCount > 0 {
+            return "\(model.openMineCount) promise\(model.openMineCount == 1 ? "" : "s") waiting on you."
+        }
+        return "Ready when your next call starts."
+    }
+
     @ViewBuilder
     private var recordCard: some View {
         switch agent.state {
-        case .recording:
-            HStack(spacing: 12) {
-                Circle().fill(Color.red).frame(width: 12, height: 12)
+        case .recording(_, let since):
+            HStack(spacing: 14) {
+                PulsingDot(size: 12)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Recording in progress").font(.headline)
-                    Text("Live notes and suggestions are in the small floating window.").font(.caption).foregroundStyle(.secondary)
+                    Text("Recording").font(.title3.bold())
+                    TimelineView(.periodic(from: since, by: 1)) { context in
+                        Text(Theme.elapsed(from: since, to: context.date))
+                            .font(.system(.callout, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                    }
+                    Text("Live notes and suggestions are in the small floating window.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
                 Spacer()
                 Button("Stop recording") { agent.onStop() }.buttonStyle(PrimaryButtonStyle(destructive: true))
             }
-            .card()
+            .padding(20)
+            .background(Theme.record.opacity(0.08), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Theme.record.opacity(0.25), lineWidth: 1))
         case .callFound(let call):
-            HStack(spacing: 12) {
-                Image(systemName: "video.circle.fill").font(.title).foregroundStyle(Color.accentColor)
+            HStack(spacing: 14) {
+                BrandTile(symbol: "video.fill", size: 44)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("\(call.app) call detected").font(.headline)
-                    Text("Want me to record it and take notes?").font(.caption).foregroundStyle(.secondary)
+                    Text("\(call.app) call detected").font(.title3.bold())
+                    Text("Want me to record it and take notes?").font(.callout).foregroundStyle(.secondary)
                 }
                 Spacer()
                 Button("Not now") { agent.onIgnore() }.buttonStyle(SoftButtonStyle())
                 Button("Start recording") { agent.onRecord() }.buttonStyle(PrimaryButtonStyle())
             }
-            .card()
+            .padding(20)
+            .background(Theme.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Theme.accent.opacity(0.25), lineWidth: 1))
         default:
-            HStack(spacing: 12) {
-                Image(systemName: "record.circle").font(.title).foregroundStyle(Color.accentColor)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Start a recording").font(.headline)
+            HStack(spacing: 16) {
+                ZStack {
+                    Circle().fill(Color.white.opacity(0.2))
+                    Image(systemName: "waveform").font(.title2.weight(.semibold)).foregroundColor(.white)
+                }
+                .frame(width: 52, height: 52)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Ready when you are").font(.title3.bold()).foregroundColor(.white)
                     Text(model.setup.screen
-                         ? "I also offer to record when I see a Meet, Teams or Zoom call."
+                         ? "I'll also offer to record when I see a Meet, Teams or Zoom call."
                          : "Allow Screen Recording above first, then you can record.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(.callout)
+                        .foregroundColor(Color.white.opacity(0.85))
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer()
-                Button("Start recording") { agent.onRecordNow() }
-                    .buttonStyle(PrimaryButtonStyle())
-                    .disabled(!model.setup.screen)
+                Button { agent.onRecordNow() } label: {
+                    Label("Start recording", systemImage: "record.circle")
+                }
+                .buttonStyle(HeroButtonStyle())
+                .disabled(!model.setup.screen)
             }
-            .card()
+            .padding(20)
+            .background(Theme.brand, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .shadow(color: Theme.accent.opacity(0.28), radius: 16, x: 0, y: 8)
         }
     }
 
@@ -321,26 +353,24 @@ struct HomeView: View {
                 .buttonStyle(SoftButtonStyle())
             }
             if model.projectNames.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("No projects yet").font(.headline)
-                    Text("Make one for each client or topic. Then drop in calls, files, emails and notes, and ask questions across all of it. The more you add, the better the live suggestions get.")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                    Button("Create your first project", action: onNewProject).buttonStyle(PrimaryButtonStyle())
-                }
-                .card()
+                EmptyState(icon: "folder.badge.plus",
+                           title: "No projects yet",
+                           message: "Make one for each client or topic. Then drop in calls, files, emails and notes, and ask questions across all of it. The more you add, the better the live suggestions get.",
+                           button: "Create your first project",
+                           action: onNewProject)
             } else {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 12)], spacing: 12) {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 14)], spacing: 14) {
                     ForEach(model.projectNames, id: \.self) { name in
                         Button {
                             model.selection = name
                         } label: {
-                            VStack(alignment: .leading, spacing: 6) {
-                                Image(systemName: "folder.fill").font(.title2).foregroundStyle(Color.accentColor)
+                            VStack(alignment: .leading, spacing: 10) {
+                                BrandTile(symbol: "folder.fill", size: 34)
                                 Text(name).font(.headline).lineLimit(1)
                                 Text(summaryLine(for: name)).font(.caption).foregroundStyle(.secondary)
                             }
                             .card()
+                            .hoverLift()
                         }
                         .buttonStyle(.plain)
                     }
@@ -366,10 +396,9 @@ struct HomeView: View {
                 }
             }
             if model.allCalls.isEmpty {
-                Text("Calls you record will show up here with an automatic summary.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .card()
+                EmptyState(icon: "waveform",
+                           title: "No calls yet",
+                           message: "Calls you record will show up here with an automatic summary.")
             } else {
                 VStack(spacing: 0) {
                     ForEach(Array(model.allCalls.prefix(5))) { call in
@@ -379,7 +408,7 @@ struct HomeView: View {
                     }
                 }
                 .padding(.horizontal, 14)
-                .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .card(padding: 0)
             }
         }
     }
@@ -390,6 +419,7 @@ struct HomeView: View {
 struct SetupChecklist: View {
     @ObservedObject var model: LibraryModel
     var title: String
+    @State private var showAI = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -420,10 +450,13 @@ struct SetupChecklist: View {
                 button: "Allow") { model.grant(.speech) }
             row(done: model.setup.key,
                 name: "AI assistant",
-                why: "Unlocks summaries, live suggestions and chat. A free Google key works.",
-                button: "Connect") { model.selection = LibraryModel.settingsKey }
+                why: "Unlocks summaries, live suggestions and chat. Free with Google, or use Claude or this Mac.",
+                button: "Connect") { showAI = true }
         }
         .card()
+        .sheet(isPresented: $showAI) {
+            AISetupSheet(model: model) { showAI = false }
+        }
     }
 
     private func row(done: Bool, name: String, why: String, button: String, action: @escaping () -> Void) -> some View {

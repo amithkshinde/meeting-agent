@@ -19,6 +19,49 @@ scripts/build-app.sh
 open build/MeetingAgent.app
 ```
 
+## Installers (for sharing)
+
+The installer is built on your Mac and saved in a folder called `dist`. It is not stored in this repository, so make it yourself:
+
+1. Double-click **Make Installer.command**. It takes two to four minutes.
+2. A folder opens with the installer inside `dist/`.
+
+| File | Which Macs it is for |
+|---|---|
+| `dist/MeetingAgent-<version>-universal.dmg` | **Use this one for everyone.** One file that runs on both Apple Silicon (M1 or newer) and Intel Macs, macOS 15 or later. |
+
+There are no separate Apple Silicon and Intel files. If you find a file ending in `-arm64.dmg` in `dist/`, it came from an older build script and only works on Apple Silicon. Send the `-universal` file instead.
+
+Send that one `.dmg`. The person opens it, drags Meeting Agent into Applications, and follows `READ ME FIRST.txt` inside the disk image. The app is signed with your own certificate, not an Apple Developer ID, so macOS shows a one-time warning: System Settings > Privacy & Security > Open Anyway. Removing the warning completely needs a paid Apple Developer account and notarization.
+
+The first-run setup in the app walks a new person through the three permissions and through connecting the AI: a free Gemini key, a Claude key, or the Mac's built-in AI (Apple Silicon only), with step-by-step help for getting each key.
+
+## Run it from the Terminal
+
+Open the Terminal app and go to the project folder (change the path if yours is elsewhere):
+
+```bash
+cd ~/Desktop/meeting-agent-main
+```
+
+If you get "permission denied" on a script, run this once: `chmod +x scripts/*.sh *.command`
+
+| What you want | Command |
+|---|---|
+| Build and open the app | `scripts/build-app.sh && open build/MeetingAgent.app` |
+| Build, copy into Applications and open | `scripts/install.sh` |
+| Build the shareable installer (Apple Silicon and Intel) | `scripts/make-installer.sh` |
+| Build only a universal app, no disk image | `UNIVERSAL=1 scripts/build-app.sh` |
+| One-time: create the signing certificate so macOS keeps permissions between builds | `scripts/setup-signing.sh` |
+| Run the app with its messages shown in the Terminal | `build/MeetingAgent.app/Contents/MacOS/MeetingAgent` |
+| Watch the log while it runs | `tail -f ~/Movies/MeetingAgent/spike-log.txt` |
+| Run the tests | `swift test` |
+| Quit a running copy | `pkill -x MeetingAgent` |
+| Open the recordings folder | `open ~/Movies/MeetingAgent` |
+| Clear a macOS "can't be opened" block on a copy you were sent | `xattr -dr com.apple.quarantine "/Applications/Meeting Agent.app"` |
+
+You need Xcode or the Xcode Command Line Tools (`xcode-select --install`) to build. People who only receive the installer do not.
+
 ## What it does
 
 **During a call**
@@ -55,7 +98,7 @@ open build/MeetingAgent.app
 
 ## AI key
 
-The cloud AI uses either a free Google Gemini key (https://aistudio.google.com/apikey) or an Anthropic key. Paste it in Settings. Free Google keys may let Google use what you send to improve its products, so use a paid key or the on-device option for confidential work.
+The cloud AI uses either a free Google Gemini key (https://aistudio.google.com/apikey) or an Anthropic Claude key (https://console.anthropic.com/settings/keys), or the Mac's built-in AI. Settings > AI assistant > Set up AI walks you through getting and pasting a key. Free Gemini keys allow only about 20 requests a day, so live suggestions slow down and stop early to leave room for the call summary. Free Google keys may let Google use what you send to improve its products, so use a paid key or the on-device option for confidential work.
 
 ## Project layout
 

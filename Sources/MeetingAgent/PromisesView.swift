@@ -129,7 +129,7 @@ struct PromiseList: View {
                         )
                     }
                     let project = model.project(of: item)
-                    if showProject, !project.isEmpty { Chip(text: project, icon: "folder", tint: .accentColor) }
+                    if showProject, !project.isEmpty { Chip(text: project, icon: "folder", tint: Theme.accent) }
                     if let call = model.call(for: item) {
                         Button("From call, \(call.date.formatted(date: .abbreviated, time: .omitted))") { model.detailCall = call }
                             .buttonStyle(.link)

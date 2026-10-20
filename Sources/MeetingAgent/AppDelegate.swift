@@ -35,6 +35,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private var watchdogTimer: Timer?
     private var copilotBusy = false
     private var copilotFailures = 0
+    private var geminiPauseShown = false
+    private var lastGeminiTick = Date.distantPast
     private var lineCounter = 0
     private var lastCopilotLine = 0
     private var recordingStart = Date()
@@ -49,6 +51,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if offerMoveToApplications() { return }
         if Bundle.main.object(forInfoDictionaryKey: "CFBundleIconFile") == nil {
             NSApp.applicationIconImage = AppIcon.make()
         }
@@ -225,6 +228,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         edit.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
         editItem.submenu = edit
 
+        let recordItem = NSMenuItem()
+        bar.addItem(recordItem)
+        let recordMenu = NSMenu(title: "Recording")
+        let toggleRecording = NSMenuItem(title: "Start or Stop Recording", action: #selector(toggleRecordingFromMenu), keyEquivalent: "r")
+        toggleRecording.keyEquivalentModifierMask = [.command, .shift]
+        toggleRecording.target = self
+        recordMenu.addItem(toggleRecording)
+        recordItem.submenu = recordMenu
+
         let windowItem = NSMenuItem()
         bar.addItem(windowItem)
         let window = NSMenu(title: "Window")
@@ -239,6 +251,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         window.addItem(floating)
         windowItem.submenu = window
         NSApp.windowsMenu = window
+
+        let helpItem = NSMenuItem()
+        bar.addItem(helpItem)
+        let helpMenu = NSMenu(title: "Help")
+        let replay = NSMenuItem(title: "Show the welcome and setup again", action: #selector(replaySetup), keyEquivalent: "")
+        replay.target = self
+        helpMenu.addItem(replay)
+        helpItem.submenu = helpMenu
+        NSApp.helpMenu = helpMenu
 
         NSApp.mainMenu = bar
     }
@@ -379,9 +400,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 lineCounter = 0
                 lastCopilotLine = 0
                 copilotFailures = 0
+                geminiPauseShown = false
                 startCopilot()
                 startWatchdog()
                 setStatusIcon(recording: true)
+                Theme.tap()
             } catch {
                 Log.write("could not start recording: \(error.localizedDescription)")
                 model.state = .error(error.localizedDescription)
@@ -497,6 +520,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         guard case .recording = model.state, model.copilotOn, !copilotBusy,
               lineCounter != lastCopilotLine,
               let key = AIAccess.key(project: model.client, projects: projects) else { return }
+        // A free Gemini key allows only a handful of requests a day. Go slowly and leave room for the summary.
+        if key != AIAccess.localKey, !key.hasPrefix("sk-ant-") {
+            if !GeminiBudget.liveSuggestionsAllowed {
+                if !geminiPauseShown {
+                    geminiPauseShown = true
+                    model.raise(AppAlert(id: "copilot", message: "Live suggestions are paused to save your free Gemini limit for the call summary. Claude has no tight daily limit.", button: "Change AI", section: LibraryModel.settingsKey, isInfo: true))
+                }
+                return
+            }
+            if Date().timeIntervalSince(lastGeminiTick) < 120 { return }
+            lastGeminiTick = Date()
+        }
         copilotBusy = true
         lastCopilotLine = lineCounter
 
@@ -578,6 +613,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
     private func finishCall(folder: URL) {
         stopCopilot()
+        Theme.tap()
         let id = folder.lastPathComponent
         let typed = model.client.trimmed
         let client = typed.isEmpty ? MemoryStore.unassigned : projects.canonical(typed, memory: memory, knowledge: knowledge)
@@ -664,6 +700,51 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     }
 
     /// Opens the main window, optionally on a given section such as "§settings".
+    /// When the app is opened straight from the installer disk image, offer to copy it into Applications.
+    /// Returns true when it relaunched from Applications and this copy should quit.
+    private func offerMoveToApplications() -> Bool {
+        let path = Bundle.main.bundlePath
+        guard path.hasPrefix("/Volumes/") || path.contains("/AppTranslocation/") else { return false }
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.messageText = "Move Meeting Agent to your Applications folder?"
+        alert.informativeText = "It works best from Applications. macOS remembers its permissions there, and you can find it in Launchpad and Spotlight."
+        alert.addButton(withTitle: "Move to Applications")
+        alert.addButton(withTitle: "Not now")
+        guard alert.runModal() == .alertFirstButtonReturn else { return false }
+
+        let destination = "/Applications/Meeting Agent.app"
+        do {
+            if FileManager.default.fileExists(atPath: destination) {
+                try FileManager.default.removeItem(atPath: destination)
+            }
+            try runTool("/usr/bin/ditto", [path, destination])
+            // You have already chosen to open this app, so clear the "downloaded from the internet" flag on the copy.
+            _ = try? runTool("/usr/bin/xattr", ["-dr", "com.apple.quarantine", destination])
+            NSWorkspace.shared.openApplication(at: URL(fileURLWithPath: destination), configuration: NSWorkspace.OpenConfiguration()) { _, _ in
+                DispatchQueue.main.async { NSApp.terminate(nil) }
+            }
+            return true
+        } catch {
+            let failure = NSAlert()
+            failure.messageText = "Couldn't move the app"
+            failure.informativeText = "Drag Meeting Agent into your Applications folder yourself, then open it from there."
+            failure.runModal()
+            return false
+        }
+    }
+
+    private func runTool(_ tool: String, _ arguments: [String]) throws {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: tool)
+        process.arguments = arguments
+        try process.run()
+        process.waitUntilExit()
+        if process.terminationStatus != 0 {
+            throw NSError(domain: "MeetingAgent", code: Int(process.terminationStatus))
+        }
+    }
+
     private func openApp(_ section: String? = nil) {
         if let section { library.selection = section }
         library.reload()
@@ -671,6 +752,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             let host = NSHostingController(rootView: MainView(model: library, agent: model))
             let window = NSWindow(contentViewController: host)
             window.title = "Meeting Agent"
+            window.titlebarAppearsTransparent = true
+            window.titleVisibility = .hidden
             window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
             window.setContentSize(NSSize(width: 1020, height: 680))
             window.isReleasedWhenClosed = false
@@ -679,6 +762,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         }
         NSApp.activate(ignoringOtherApps: true)
         mainWindow?.makeKeyAndOrderFront(nil)
+    }
+
+    @objc private func replaySetup() {
+        UserDefaults.standard.set(0, forKey: "onboardingPage")
+        UserDefaults.standard.set(false, forKey: "onboarded")
+        openApp(nil)
     }
 
     @objc private func togglePanel() {

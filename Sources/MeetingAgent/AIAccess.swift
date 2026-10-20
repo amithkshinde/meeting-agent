@@ -23,6 +23,9 @@ enum AIAccess {
 
     /// Why the on-device model can't be used, in plain words.
     static var localProblem: String {
+        #if arch(x86_64)
+        return "The on-device AI needs a Mac with an Apple chip (M1 or newer). Choose Google Gemini or Claude instead."
+        #endif
         #if canImport(FoundationModels)
         if #available(macOS 26.0, *) {
             if case .unavailable = SystemLanguageModel.default.availability {

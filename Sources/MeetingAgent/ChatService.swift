@@ -102,6 +102,7 @@ enum ChatService {
         if key.hasPrefix("sk-ant-") {
             return try await askClaude(key: key, system: system, history: history, prompt: prompt, maxTokens: maxTokens)
         }
+        GeminiBudget.record()
         return try await askGemini(key: key, system: system, history: history, prompt: prompt, json: json, maxTokens: maxTokens)
     }
 
@@ -211,4 +212,23 @@ enum ChatService {
         guard !text.isEmpty else { throw ChatError.message("The AI service sent an empty answer.") }
         return text
     }
+}
+
+/// Counts today's Gemini requests. Free Gemini keys allow only about 20 a day, so live suggestions
+/// stop early and leave room for the summary after the call.
+enum GeminiBudget {
+    static let dailyLimit = 20
+    static let reservedForSummary = 10
+
+    private static var dayKey: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        return "geminiRequests-" + formatter.string(from: Date())
+    }
+
+    static var usedToday: Int { UserDefaults.standard.integer(forKey: dayKey) }
+
+    static func record() { UserDefaults.standard.set(usedToday + 1, forKey: dayKey) }
+
+    static var liveSuggestionsAllowed: Bool { usedToday < dailyLimit - reservedForSummary }
 }

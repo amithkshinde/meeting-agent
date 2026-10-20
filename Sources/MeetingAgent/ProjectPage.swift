@@ -220,7 +220,7 @@ private struct OverviewTab: View {
 
                 if hasMaterial {
                     HStack {
-                        Image(systemName: "bubble.left.and.text.bubble.right").foregroundStyle(Color.accentColor)
+                        Image(systemName: "bubble.left.and.text.bubble.right").foregroundStyle(Theme.accent)
                         Text("Ask anything about this project").font(.callout)
                         Spacer()
                         Button("Open chat") { model.projectTab = .ask }.buttonStyle(SoftButtonStyle())
@@ -316,7 +316,7 @@ struct AskPanel: View {
                 Text(message.text)
                     .padding(10)
                     .foregroundColor(.white)
-                    .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .background(Theme.accent, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .textSelection(.enabled)
             }
         } else if message.isError {
@@ -339,7 +339,7 @@ struct AskPanel: View {
                 Image(systemName: "arrow.up.circle.fill").font(.title)
             }
             .buttonStyle(.plain)
-            .foregroundStyle(Color.accentColor)
+            .foregroundStyle(Theme.accent)
             .disabled(draft.trimmingCharacters(in: .whitespaces).isEmpty || model.asking)
             if !model.messages.isEmpty {
                 Button("Clear") { model.clearChat() }.buttonStyle(.link)
@@ -446,7 +446,7 @@ private struct ContentTab: View {
         return VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: icon(for: item.kind))
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(Theme.accent)
                     .frame(width: 24)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(item.title).font(.callout.weight(.semibold)).lineLimit(1)
@@ -456,7 +456,7 @@ private struct ContentTab: View {
                 }
                 Spacer()
                 if !model.isProject {
-                    Chip(text: item.client.isEmpty ? "General" : item.client, icon: "folder", tint: item.client.isEmpty ? .secondary : .accentColor)
+                    Chip(text: item.client.isEmpty ? "General" : item.client, icon: "folder", tint: item.client.isEmpty ? Color.secondary : Theme.accent)
                 }
                 if let path = item.path, FileManager.default.fileExists(atPath: path) {
                     Button("Open") { NSWorkspace.shared.open(URL(fileURLWithPath: path)) }.buttonStyle(.link).font(.caption)

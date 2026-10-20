@@ -97,6 +97,8 @@ struct PanelView: View {
         .frame(width: 380, alignment: .leading)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Color.primary.opacity(0.08)))
+        .tint(Theme.accent)
+        .animation(.easeInOut(duration: 0.2), value: model.collapsed)
     }
 
     @ViewBuilder
@@ -116,7 +118,7 @@ struct PanelView: View {
             HStack(spacing: 10) {
                 Image(systemName: model.setupDone ? "waveform.circle.fill" : "exclamationmark.circle.fill")
                     .font(.system(size: 30))
-                    .foregroundStyle(model.setupDone ? Color.accentColor : Color.orange)
+                    .foregroundStyle(model.setupDone ? Theme.accent : Color.orange)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(model.setupDone ? "Ready to listen" : "Almost ready").font(.headline)
                     Text(model.setupDone ? "Join a call and I'll offer to record it." : "A few quick steps are left.")
@@ -144,7 +146,7 @@ struct PanelView: View {
         if let event = model.upcoming.first(where: { $0.start.timeIntervalSinceNow < 20 * 60 && $0.start.timeIntervalSinceNow > -600 }) {
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
-                    Image(systemName: "calendar").foregroundStyle(Color.accentColor)
+                    Image(systemName: "calendar").foregroundStyle(Theme.accent)
                     Text(event.title).font(.caption.bold()).lineLimit(1)
                     Spacer()
                     Text(event.start, style: .time).font(.caption).foregroundStyle(.secondary)
@@ -192,7 +194,7 @@ struct PanelView: View {
     private func callFoundView(_ call: DetectedCall) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
-                Image(systemName: "video.circle.fill").font(.system(size: 30)).foregroundStyle(Color.accentColor)
+                Image(systemName: "video.circle.fill").font(.system(size: 30)).foregroundStyle(Theme.accent)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("\(call.app) call detected").font(.headline)
                     Text("Want me to record and take notes?").font(.caption).foregroundStyle(.secondary)
@@ -217,7 +219,7 @@ struct PanelView: View {
     private func recordingView(call: DetectedCall, since: Date) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
-                Circle().fill(Color.red).frame(width: 10, height: 10)
+                PulsingDot(size: 8)
                 Text("Recording").font(.headline)
                 TimelineView(.periodic(from: since, by: 1)) { context in
                     Text(Self.elapsed(from: since, to: context.date))
@@ -234,6 +236,7 @@ struct PanelView: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
                 .help(model.collapsed ? "Show more" : "Show less")
+                .accessibilityLabel(model.collapsed ? "Show more" : "Show less")
             }
 
             if model.collapsed {
@@ -482,7 +485,7 @@ struct PanelView: View {
                         Image(systemName: "arrow.up.circle.fill").font(.title2)
                     }
                     .buttonStyle(.plain)
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(Theme.accent)
                     .disabled(draft.trimmingCharacters(in: .whitespaces).isEmpty || model.asking)
                 }
             }

@@ -33,7 +33,7 @@ enum HotKey {
             let status = GetEventParameter(
                 event,
                 EventParamName(kEventParamDirectObject),
-                EventParamType(typeEventHotKey),
+                EventParamType(typeEventHotKeyID),
                 nil,
                 MemoryLayout<EventHotKeyID>.size,
                 nil,

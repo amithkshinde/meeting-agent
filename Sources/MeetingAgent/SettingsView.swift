@@ -6,6 +6,7 @@ struct SettingsView: View {
     @ObservedObject var model: LibraryModel
     @ObservedObject var agent: AgentModel
     @State private var keyDraft = ""
+    @State private var showAISetup = false
     @State private var loginOn = SMAppService.mainApp.status == .enabled
     @AppStorage("autoRecord") private var autoRecord = false
     @AppStorage("speechLocale") private var locale = "auto"
@@ -55,58 +56,37 @@ struct SettingsView: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Picker("Where should the AI run?", selection: $aiLocal) {
-                Text("In the cloud (best quality, needs a free key)").tag(false)
-                Text("On this Mac only (private, simpler answers)").tag(true)
-            }
-            .pickerStyle(.radioGroup)
-            .onChange(of: aiLocal) { model.refreshSetup() }
-
-            if aiLocal {
-                if AIAccess.localAvailable {
-                    Text("Nothing you write or say leaves this Mac. Answers are shorter and less detailed than the cloud AI, and very long calls are trimmed.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                } else {
-                    Text(AIAccess.localProblem).font(.caption).foregroundColor(.orange).fixedSize(horizontal: false, vertical: true)
-                }
+            if model.hasKey {
+                Text("Using: \(AIAccess.providerLabel)").font(.callout.weight(.semibold))
             } else {
-                if !model.hasKey {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("1. Open the page below and sign in with your Google account.")
-                        Text("2. Click “Create API key”, then copy it.")
-                        Text("3. Paste it here and press Save.")
-                    }
+                Text("Not set up yet. It takes about two minutes, and I'll walk you through getting a key if you don't have one.")
                     .font(.callout)
-                    Link("Open Google AI Studio to get a free key", destination: URL(string: "https://aistudio.google.com/apikey")!)
-                        .font(.callout)
-                }
-                HStack {
-                    SecureField(model.hasKey ? "Paste a new key to replace the current one" : "Paste your key here", text: $keyDraft)
-                        .textFieldStyle(.roundedBorder)
-                        .onSubmit(saveKey)
-                    Button("Save", action: saveKey)
-                        .buttonStyle(PrimaryButtonStyle())
-                        .disabled(keyDraft.trimmingCharacters(in: .whitespaces).isEmpty)
-                }
-                Text("Privacy: only the text of transcripts, notes and files is sent. Audio and video never leave your Mac. Free Google keys may let Google use what you send to improve its products. For confidential projects, switch that project to “this Mac only” from its ⋯ menu.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+            }
+
+            HStack {
+                Button(model.hasKey ? "Change AI…" : "Set up AI (2 minutes)") { showAISetup = true }
+                    .buttonStyle(PrimaryButtonStyle())
+                Button("Test connection") { model.testKey() }
+                    .buttonStyle(SoftButtonStyle())
+                    .disabled(model.keyTesting || !model.hasKey)
+                if !aiLocal, model.hasKey {
+                    Button("Remove key") { model.removeKey() }.buttonStyle(SoftButtonStyle())
+                }
             }
 
             if !model.keyTest.isEmpty {
                 Text(model.keyTest).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
-            HStack {
-                Button("Test connection") { model.testKey() }.buttonStyle(SoftButtonStyle()).disabled(model.keyTesting || !model.hasKey)
-                if !aiLocal, model.hasKey {
-                    Button("Remove key") { model.removeKey() }.buttonStyle(SoftButtonStyle())
-                }
-            }
+            Text("Privacy: only the text of transcripts, notes and files is sent. Audio and video never leave your Mac. Free Google keys may let Google use what you send to improve its products. For confidential projects, switch that project to “this Mac only” from its ⋯ menu.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .card()
+        .sheet(isPresented: $showAISetup) {
+            AISetupSheet(model: model) { showAISetup = false }
+        }
     }
 
     // MARK: Calendar

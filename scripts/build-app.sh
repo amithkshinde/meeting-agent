@@ -19,11 +19,24 @@ fi
 echo "Signing with: $IDENTITY"
 APP="build/MeetingAgent.app"
 
-swift build -c release
+if [ "${UNIVERSAL:-0}" = "1" ]; then
+  # One app that runs on both Apple Silicon and Intel Macs.
+  echo "Building for Apple Silicon and Intel. This takes a little longer..."
+  swift build -c release --triple arm64-apple-macosx15.0
+  swift build -c release --triple x86_64-apple-macosx15.0
+  ARM_BIN="$(swift build -c release --triple arm64-apple-macosx15.0 --show-bin-path)/MeetingAgent"
+  X86_BIN="$(swift build -c release --triple x86_64-apple-macosx15.0 --show-bin-path)/MeetingAgent"
+  mkdir -p build
+  lipo -create "$ARM_BIN" "$X86_BIN" -output build/MeetingAgent-universal
+  BIN="build/MeetingAgent-universal"
+else
+  swift build -c release
+  BIN=".build/release/MeetingAgent"
+fi
 
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp ".build/release/MeetingAgent" "$APP/Contents/MacOS/MeetingAgent"
+cp "$BIN" "$APP/Contents/MacOS/MeetingAgent"
 cp "Resources/Info.plist" "$APP/Contents/Info.plist"
 
 # App icon: turn Resources/AppIcon.png into an .icns file (skipped quietly if the tools are missing).
