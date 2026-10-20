@@ -21,7 +21,7 @@ open build/MeetingAgent.app
 
 ## Installers (for sharing)
 
-Two ready-made installers are in the main folder of this repository, next to this README:
+Two ready-made installers are in the **main folder** of this repository, next to this README. There is no `dist` folder on GitHub. `dist` is only the folder on your own Mac where **Make Installer.command** saves a new build.
 
 | File | Which Macs it is for |
 |---|---|
@@ -43,7 +43,7 @@ Not sure which Mac you have? Apple menu > About This Mac. If it says "Chip: Appl
 The `.dmg` files in this repository are snapshots of version 0.0.1 and do not update by themselves. After you change the code, make a new one on your Mac:
 
 1. Double-click **Make Installer.command** (also in the main folder). It takes two to four minutes.
-2. A folder called `dist` opens with a new `MeetingAgent-<version>-universal.dmg` inside. That is the file to share. The `dist` folder is not stored in this repository.
+2. A folder called `dist` opens on your Mac with a new `MeetingAgent-<version>-universal.dmg` inside. That is the file to share. This `dist` folder stays on your Mac and is not uploaded to GitHub.
 3. To keep it on GitHub, upload the new file next to this README, replacing the old one.
 
 ## Run it from the Terminal
