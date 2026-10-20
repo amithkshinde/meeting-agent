@@ -21,20 +21,30 @@ open build/MeetingAgent.app
 
 ## Installers (for sharing)
 
-The installer is built on your Mac and saved in a folder called `dist`. It is not stored in this repository, so make it yourself:
-
-1. Double-click **Make Installer.command**. It takes two to four minutes.
-2. A folder opens with the installer inside `dist/`.
+Two ready-made installers are in the main folder of this repository, next to this README:
 
 | File | Which Macs it is for |
 |---|---|
-| `dist/MeetingAgent-<version>-universal.dmg` | **Use this one for everyone.** One file that runs on both Apple Silicon (M1 or newer) and Intel Macs, macOS 15 or later. |
+| `MeetingAgent-0.0.1-universal.dmg` | **Use this one for everyone.** It runs on both Apple Silicon (M1 or newer) and Intel Macs, macOS 15 or later. About 3 MB. |
+| `MeetingAgent-0.0.1-arm64.dmg` | Apple Silicon Macs only. It is smaller (about 1.8 MB) and does nothing the universal file doesn't. It will not open on an Intel Mac. |
 
-There are no separate Apple Silicon and Intel files. If you find a file ending in `-arm64.dmg` in `dist/`, it came from an older build script and only works on Apple Silicon. Send the `-universal` file instead.
+Not sure which Mac you have? Apple menu > About This Mac. If it says "Chip: Apple M…", it is Apple Silicon. If it says "Processor: Intel…", it is Intel. When in doubt, use the universal file.
 
-Send that one `.dmg`. The person opens it, drags Meeting Agent into Applications, and follows `READ ME FIRST.txt` inside the disk image. The app is signed with your own certificate, not an Apple Developer ID, so macOS shows a one-time warning: System Settings > Privacy & Security > Open Anyway. Removing the warning completely needs a paid Apple Developer account and notarization.
+### How to install it
 
-The first-run setup in the app walks a new person through the three permissions and through connecting the AI: a free Gemini key, a Claude key, or the Mac's built-in AI (Apple Silicon only), with step-by-step help for getting each key.
+1. **Download the file.** On GitHub, click the `.dmg` file name, then click the download button at the top right. Or use this direct link for the universal file: https://github.com/amithkshinde/meeting-agent/raw/main/MeetingAgent-0.0.1-universal.dmg
+2. **Open it** by double-clicking the downloaded `.dmg`. A window opens with the app, an Applications folder shortcut and a `READ ME FIRST.txt`.
+3. **Drag Meeting Agent onto Applications.**
+4. **Open it the first time.** macOS shows a warning because the app is not signed with an Apple Developer ID. Open Meeting Agent from Applications and click Done. Then go to System Settings > Privacy & Security, scroll to the Security section, click Open Anyway, and enter your Mac password. You only do this once. (Shortcut: in the Terminal, run `xattr -dr com.apple.quarantine "/Applications/Meeting Agent.app"` and open the app normally.)
+5. **Follow the setup inside the app** (about three minutes): allow Screen Recording, Microphone and Speech Recognition, then connect the AI. The app explains how to get a free Gemini key or a Claude key, or you can use the Mac's built-in AI (Apple Silicon only).
+
+### Making a fresh installer
+
+The `.dmg` files in this repository are snapshots of version 0.0.1 and do not update by themselves. After you change the code, make a new one on your Mac:
+
+1. Double-click **Make Installer.command** (also in the main folder). It takes two to four minutes.
+2. A folder called `dist` opens with a new `MeetingAgent-<version>-universal.dmg` inside. That is the file to share. The `dist` folder is not stored in this repository.
+3. To keep it on GitHub, upload the new file next to this README, replacing the old one.
 
 ## Run it from the Terminal
 
@@ -50,7 +60,7 @@ If you get "permission denied" on a script, run this once: `chmod +x scripts/*.s
 |---|---|
 | Build and open the app | `scripts/build-app.sh && open build/MeetingAgent.app` |
 | Build, copy into Applications and open | `scripts/install.sh` |
-| Build the shareable installer (Apple Silicon and Intel) | `scripts/make-installer.sh` |
+| Build the shareable installer (Apple Silicon and Intel), saved in `dist/` | `scripts/make-installer.sh` |
 | Build only a universal app, no disk image | `UNIVERSAL=1 scripts/build-app.sh` |
 | One-time: create the signing certificate so macOS keeps permissions between builds | `scripts/setup-signing.sh` |
 | Run the app with its messages shown in the Terminal | `build/MeetingAgent.app/Contents/MacOS/MeetingAgent` |
