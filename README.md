@@ -108,10 +108,54 @@ The cloud AI uses either a free Google Gemini key (https://aistudio.google.com/a
 
 ## Known limits
 
-- Speaker labels are "You" and "Them". Names from the calendar are used only when the invite makes it clear who is who.
-- Hindi and Hinglish accuracy depends on Apple's on-device recogniser; the clean-up pass helps but is not perfect. Kannada support varies by Mac.
-- Direct Gmail import is not built. In Gmail, download an email (⋮ > Download message) and drag the .eml file onto a project.
-- The on-device AI has a small context window, so answers are shorter and long calls are trimmed.
+This is an early version. These are the things that do not work well yet.
+
+**Speed**
+- It is slow in places, and speeding it up is in progress. After a call, cleaning the transcript, writing the summary, finding promises and refreshing the project brief are separate AI requests that run one after another. Live suggestions arrive every 30 seconds at best, and every two minutes or slower on a free Gemini key.
+
+**AI limits (Gemini)**
+- A free Gemini key allows only about 20 AI requests per 24 hours (seen in practice on `gemini-3.8-flash`). After that, every AI feature stops until the limit resets, roughly 19 hours later: call summaries, cleaned transcripts, promises, project briefs, live suggestions, and chat.
+- Transcription keeps working, because it uses Apple's speech engine on your Mac and does not use the AI key.
+- To stay inside the limit, live suggestions on a Gemini key slow down and stop after about 10 requests a day, so the call summary still has room. That makes live suggestions of little use on a free key.
+- There is no "retry" button yet. If a summary fails, it stays without one, and you cannot re-run it later.
+- A Claude key (pay as you go) has no such tight daily limit.
+
+**Who said what**
+- Speaker labels are only "You" (your microphone) and "Them" (everything else on the call). It cannot tell the other people in a meeting apart, so three people on the other side all show up as "Them".
+- Names from the calendar invite are listed as attendees. They are not matched to voices.
+- If you use laptop speakers instead of headphones, the other people's voices leak into your microphone and can be labelled "You". Headphones fix most of this.
+
+**Transcription**
+- It uses Apple's on-device speech engine, and accuracy varies. It mishears names and jargon, drops quiet or overlapping speech, and misreads music and TV in the background.
+- English works best. Hindi and Hinglish accuracy is untested on real calls and depends on Apple's recogniser. Kannada support varies by Mac.
+
+**Video and storage**
+- Video is about 400 MB per hour at the current setting (HEVC, up to 1080p, 10 fps), plus about 45 MB per hour per audio track. Small text can look soft.
+- There is no video quality setting, audio-only mode, or automatic deletion of old recordings yet.
+
+**On-device AI**
+- It needs an Apple Silicon Mac on macOS 26 with Apple Intelligence turned on. It is not available on Intel Macs.
+- It has a small context window, so answers are shorter and long calls are trimmed.
+
+**Installing and sharing**
+- The installer is not signed with an Apple Developer ID, so macOS shows a one-time warning on another Mac (System Settings > Privacy & Security > Open Anyway).
+- The Intel half of the universal installer is untested on a real Intel Mac. Intel Macs without hardware video encoding may run hotter or slower while recording.
+- Rebuilding the app with a different signing certificate makes macOS ask for permissions again.
+- After allowing Screen Recording, macOS may need you to quit and reopen the app.
+
+**Recording and detection**
+- Call detection is a best guess for Meet, Teams, Zoom and similar apps. If it misses a call, press Start recording yourself.
+- The Mac going to sleep stops a recording. The app saves what it has and recovers the interrupted call the next time it opens.
+- The calendar briefing only reads calendars in macOS Calendar. For Google Calendar, add your Google account in System Settings > Internet Accounts first.
+
+**Privacy and data**
+- With a cloud AI key, the text of transcripts, notes and files is sent to Google or Anthropic. Audio and video never leave your Mac. Free Google keys may let Google use what you send to improve its products. Use the on-device option, or mark a project "On this Mac only", for confidential work.
+- Everything is stored in plain files on your Mac (in `~/Movies/MeetingAgent`). There is no sync, no backup and no encryption of its own.
+- Always tell people on the call that you are recording. Laws on recording differ by place.
+
+**Not built yet**
+- Direct Gmail import. In Gmail, download an email (⋮ > Download message) and drag the .eml file onto a project.
+- Windows, iPhone and iPad versions. It is a Mac app for macOS 15 or later.
 
 ## Roadmap
 
