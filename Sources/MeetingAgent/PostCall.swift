@@ -24,21 +24,32 @@ final class CallProcessor {
     You write short, useful notes for the user after a call. "You" is the user and "Them" is everyone else. \
     The transcript is automatic speech recognition, so names and numbers may be wrong. Mark anything unclear instead of guessing. \
     If you are given a list of the people on the call, use their names where the transcript makes clear who said what. \
+    A line may begin with a real person's name instead of "Them", when the video showed who was speaking. Use those names. \
     Write in English, in Markdown, with exactly these sections and nothing else: \
     ## Summary (three sentences at most), ## Key points, ## Decisions, \
     ## Action items (say who owns each one, and any date mentioned), ## Open questions, ## Raise next time. \
     Write "None." for an empty section. Only use what the transcript says.
     """
 
-    static let cleanSystem = """
+    /// Added to the summary prompt when the call shared several screens (a design review).
+    static let byScreenNote = """
+     The call shared several screens. Lines like "--- Screen 2 shown at 12:30 ---" mark when each one appeared. \
+    After the other sections, add "## By screen" with a "### Screen N" heading for each screen that was discussed, \
+    listing the feedback, questions and decisions about that screen as short bullets. Skip screens nobody discussed.
+    """
+
+    static var cleanSystem: String {
+        """
     You fix the output of automatic speech recognition for a call transcript. Each line looks like "[mm:ss] You: text" or "[mm:ss] Them: text". \
     The speech is English, Hindi, or a mix of both (Hinglish), and sometimes Kannada. \
     Fix obvious recognition mistakes, the spelling of names and numbers, punctuation and capital letters, using the other lines and the names of the people on the call for context. \
-    Keep the same script the line already uses: Hindi in Roman letters stays in Roman letters, Devanagari stays Devanagari. \
+    \(CallProcessor.scriptInstruction) \
     Keep every line, in the same order, with the same timestamp. Do not summarise, translate, add or remove sentences, and do not guess: if you are unsure, leave the words as they are. \
-    If exactly one other person was on the call, you may write their name instead of "Them". Otherwise keep "Them". \
+    Each line starts with a speaker label: "You", "Them", or a person's name. Keep every label exactly as written. \
+    If exactly one other person was on the call, you may write their name instead of "Them". \
     Reply with the corrected lines only, nothing before or after.
     """
+    }
 
     static let commitmentsSystem = """
     You find promises in a call transcript. "You" is the user and "Them" is everyone else. \
@@ -47,6 +58,45 @@ final class CallProcessor {
     "text" is under 20 words and says what will be done. "due" is a date as YYYY-MM-DD worked out from the call date (for example "by Friday"), or an empty string if no date was given. \
     At most 12 items. Never invent anything. If there are no promises, return {"items": []}.
     """
+
+    /// How Hindi should be written in the cleaned transcript. Set in Settings.
+    static var scriptInstruction: String {
+        switch UserDefaults.standard.string(forKey: "scriptPref") ?? "keep" {
+        case "roman":
+            return "Write every Hindi word in Roman letters (Hinglish), the way people type on a phone, for example \"kal meeting hai\". Turn any Devanagari into Roman letters. Leave English words as they are."
+        case "devanagari":
+            return "Write Hindi words in Devanagari. Leave English words in English."
+        default:
+            return "Keep the same script the line already uses: Hindi in Roman letters stays in Roman letters, Devanagari stays Devanagari."
+        }
+    }
+
+    /// The user's own name as the call app would show it, so their tile is never mistaken for someone else.
+    static var userName: String {
+        let saved = (UserDefaults.standard.string(forKey: "userDisplayName") ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return saved.isEmpty ? NSFullUserName() : saved
+    }
+
+    /// Puts real names on "Them" lines using who the video showed speaking. The first time it keeps the
+    /// original as transcript-raw.txt, and it always works from that original, so it is safe to run again.
+    @discardableResult
+    static func attributeSpeakers(folder: URL) -> SpeakerAttribution.Result? {
+        let samples = SpeakerLog.load(folder)
+        guard !samples.isEmpty else { return nil }
+        let rawURL = folder.appendingPathComponent("transcript-raw.txt")
+        let liveURL = folder.appendingPathComponent("transcript.txt")
+        if !FileManager.default.fileExists(atPath: rawURL.path) {
+            try? FileManager.default.copyItem(at: liveURL, to: rawURL)
+        }
+        guard let source = try? String(contentsOf: rawURL, encoding: .utf8) else { return nil }
+        let result = SpeakerAttribution.apply(to: source, samples: samples, exclude: [userName])
+        guard result.named > 0 else { return result }
+        try? result.text.write(to: liveURL, atomically: true, encoding: .utf8)
+        // Anything cleaned from the old text is out of date now.
+        try? FileManager.default.removeItem(at: folder.appendingPathComponent("transcript-clean.txt"))
+        Log.write("speakers: named \(result.named) of \(result.total) lines (\(result.names.joined(separator: ", ")))")
+        return result
+    }
 
     // MARK: - The pipeline
 
@@ -60,6 +110,7 @@ final class CallProcessor {
             defer { self.agent.summarizing = false }
             if wait { try? await Task.sleep(nanoseconds: 4_000_000_000) }
 
+            CallProcessor.attributeSpeakers(folder: folder)
             let raw = (try? String(contentsOf: folder.appendingPathComponent("transcript.txt"), encoding: .utf8)) ?? ""
             guard raw.count > 60 else {
                 Log.write("summary skipped: the transcript is too short")
@@ -91,11 +142,14 @@ final class CallProcessor {
             let earlier = self.memory.context(client: client, excluding: id)
             let people = (current.attendees ?? []).map { $0.name }
             let peopleLine = people.isEmpty ? "" : "People on the call besides the user: \(people.joined(separator: ", ")).\n\n"
+            let screens = ScreenIndex.load(folder)
+            let marked = screens.count >= 2 ? ScreenIndex.annotate(transcript, screens: screens) : transcript
             let prompt = (earlier.isEmpty ? "" : "Earlier calls with this client:\n\(earlier)\n\n")
                 + peopleLine
-                + "Transcript of this call:\n\(String(transcript.suffix(60_000)))\n\nWrite the notes now."
+                + "Transcript of this call:\n\(String(marked.suffix(60_000)))\n\nWrite the notes now."
             do {
-                let summary = try await ChatService.complete(key: key, system: CallProcessor.summarySystem, prompt: prompt, maxTokens: 1500)
+                let system = CallProcessor.summarySystem + (screens.count >= 2 ? CallProcessor.byScreenNote : "")
+                let summary = try await ChatService.complete(key: key, system: system, prompt: prompt, maxTokens: screens.count >= 2 ? 2000 : 1500)
                 let formatter = DateFormatter()
                 formatter.dateStyle = .medium
                 formatter.timeStyle = .short

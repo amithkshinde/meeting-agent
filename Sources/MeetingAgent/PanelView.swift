@@ -47,10 +47,15 @@ final class AgentModel: ObservableObject {
     @Published var upcoming: [UpcomingEvent] = []
     @Published var briefings: [String: Briefing] = [:]
     @Published var preparing: Set<String> = []
+    /// The person the video shows speaking right now, when it can tell.
+    @Published var speakingNow: String?
+    /// How many moments have been bookmarked in this call.
+    @Published var bookmarkCount = 0
 
     var onRecord: () -> Void = {}
     var onRecordNow: () -> Void = {}
     var onStop: () -> Void = {}
+    var onBookmark: () -> Void = {}
     var onIgnore: () -> Void = {}
     var onRevealLast: () -> Void = {}
     var onAsk: (String) -> Void = { _ in }
@@ -227,6 +232,14 @@ struct PanelView: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
+                Button {
+                    model.onBookmark()
+                } label: {
+                    Label(model.bookmarkCount > 0 ? "\(model.bookmarkCount)" : "Mark", systemImage: model.bookmarkCount > 0 ? "bookmark.fill" : "bookmark")
+                        .labelStyle(.titleAndIcon)
+                }
+                .buttonStyle(SoftButtonStyle())
+                .help("Bookmark this moment (Control-Option-B)")
                 Button("Stop") { model.onStop() }.buttonStyle(PrimaryButtonStyle(destructive: true))
                 Button {
                     model.collapsed.toggle()
@@ -237,6 +250,14 @@ struct PanelView: View {
                 .foregroundStyle(.secondary)
                 .help(model.collapsed ? "Show more" : "Show less")
                 .accessibilityLabel(model.collapsed ? "Show more" : "Show less")
+            }
+
+            if let speaker = model.speakingNow {
+                Label(speaker, systemImage: "waveform")
+                    .font(.caption)
+                    .foregroundStyle(Theme.accent)
+                    .lineLimit(1)
+                    .accessibilityLabel("Speaking now: \(speaker)")
             }
 
             if model.collapsed {

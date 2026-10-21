@@ -48,7 +48,8 @@ final class TrackTranscriber {
 
     /// The language chosen in the menu, or the best English that can run on this Mac.
     static func makeRecognizer(speaker: String) -> SFSpeechRecognizer? {
-        let chosen = UserDefaults.standard.string(forKey: "speechLocale") ?? "auto"
+        var chosen = UserDefaults.standard.string(forKey: "speechLocale") ?? "auto"
+        if chosen == "hinglish" { chosen = "hi-IN" }   // the Hindi engine copes best with Hindi and English mixed
         var candidates: [SFSpeechRecognizer] = []
         if chosen != "auto", let picked = SFSpeechRecognizer(locale: Locale(identifier: chosen)) {
             candidates = [picked]
@@ -250,8 +251,8 @@ final class LiveTranscriber {
         }
     }
 
-    func begin(folder: URL) {
-        started = Date()
+    func begin(folder: URL, start: Date = Date()) {
+        started = start
         let url = folder.appendingPathComponent("transcript.txt")
         fileURL = url
         FileManager.default.createFile(atPath: url.path, contents: nil)

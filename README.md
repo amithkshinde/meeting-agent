@@ -81,9 +81,19 @@ You need Xcode or the Xcode Command Line Tools (`xcode-select --install`) to bui
 - Live recap and cards: a question to ask, a point to push back on, or a flag. Each card says where it comes from.
 - Catch me up and Last minute buttons, and a chat you can ask anything.
 - Quiet mode hides suggestions until you peek.
-- Global shortcuts (Control + Option): **M** show or hide the window, **A** ask a question, **S** peek at suggestions, **R** start or stop recording.
+- Global shortcuts (Control + Option): **M** show or hide the window, **A** ask a question, **S** peek at suggestions, **R** start or stop recording, **B** bookmark this moment.
+- **Bookmarks:** press Control + Option + B (or the Mark button) to flag a moment. They appear as a Highlights list after the call, each one jumping to that point in the video.
+- **Who is speaking:** when the call is in Google Meet, the app reads the outline Meet draws around the active speaker and the name on that tile, and shows "speaking now" in the floating window.
+- **Design review mode:** when the shared screen changes a lot (a new Figma frame, the next slide), a screenshot is saved automatically.
 
 **After a call**
+- **Video synced to the transcript:** open a call and click any transcript line to jump the video to that moment. The line being played is highlighted.
+- **Real names on the transcript:** "Them" lines are renamed to the person the video showed speaking, where it is confident. The original is kept as `transcript-raw.txt`. You can also rename a speaker by hand (right-click a line).
+- **Design review:** the Screens tab groups the talk under each screenshot, and the summary gets a "By screen" section ("Screen 1: these 3 comments"). One AI request can summarise the feedback per screen.
+- **Search everything (Command + K):** one box across every call, transcript line, summary, note, file, email, promise and project. A transcript hit opens the video at that moment.
+- **Share menu:** export a call as PDF or Markdown (Notion, Obsidian and most editors open the Markdown), add promises to the Reminders app, or send them to a Notion database.
+- **Hindi and Hinglish:** choose "Hindi and English mixed" as the spoken language, choose whether the cleaned transcript is written in Roman letters or Devanagari, and translate any call into English from its Transcript tab.
+- **Older calls:** a call recorded before these features can be run through "Analyse the video" on its page, to find the speakers and screens after the fact.
 - Transcript clean-up pass for Hindi, Hinglish and names (the original is kept too).
 - Summary with decisions, action items and open questions.
 - Promises are pulled out automatically into one list: what you owe, and what others owe you, with due dates.
@@ -131,16 +141,18 @@ This is an early version. These are the things that do not work well yet.
 - A Claude key (pay as you go) has no such tight daily limit.
 
 **Who said what**
-- Speaker labels are only "You" (your microphone) and "Them" (everything else on the call). It cannot tell the other people in a meeting apart, so three people on the other side all show up as "Them".
-- Names from the calendar invite are listed as attendees. They are not matched to voices.
+- Naming speakers works by watching the video, not by recognising voices. It looks for the outline Google Meet draws around the person speaking and reads the name on that tile. It was checked on real Google Meet recordings. It has not been tested with Zoom, Teams or other apps, and it needs the participant tiles to be visible on screen (if the call window is hidden or covered, or Meet shows only the presenter, it has nothing to read).
+- When two people talk at once, or one transcript line holds two speakers, the line stays "Them" or gets the more likely name. Expect a few wrong or missing names, and fix them by right-clicking a line.
+- People who join by phone, or whose tile is never outlined, stay "Them".
+- If you use laptop speakers instead of headphones, the other people's voices leak into your microphone and can be labelled "You". Headphones fix most of this.
 - If you use laptop speakers instead of headphones, the other people's voices leak into your microphone and can be labelled "You". Headphones fix most of this.
 
 **Transcription**
 - It uses Apple's on-device speech engine, and accuracy varies. It mishears names and jargon, drops quiet or overlapping speech, and misreads music and TV in the background.
-- English works best. Hindi and Hinglish accuracy is untested on real calls and depends on Apple's recogniser. Kannada support varies by Mac.
+- English works best. Hindi and Hinglish are a first version: the "Hinglish" setting runs Apple's Hindi recogniser, which tends to write English words in Devanagari, and the AI clean-up can turn that into Roman letters. This has not been tested on real Hindi calls. Translation to English is done after the call by the AI (so it uses AI requests), and there is no live translation yet. Kannada support varies by Mac.
 
 **Video and storage**
-- Video is about 400 MB per hour at the current setting (HEVC, up to 1080p, 10 fps), plus about 45 MB per hour per audio track. Small text can look soft.
+- Video is about 400 MB per hour at the current setting (HEVC, up to 1080p, 10 fps), plus about 45 MB per hour per audio track. Small text can look soft. Screenshots add roughly 100 to 200 KB each (at most 150 per call).
 - There is no video quality setting, audio-only mode, or automatic deletion of old recordings yet.
 
 **On-device AI**
@@ -163,10 +175,17 @@ This is an early version. These are the things that do not work well yet.
 - Everything is stored in plain files on your Mac (in `~/Movies/MeetingAgent`). There is no sync, no backup and no encryption of its own.
 - Always tell people on the call that you are recording. Laws on recording differ by place.
 
+**Newer features, not fully tested**
+- These were written and checked in pieces, and the speaker outline finder was run on real recordings, but the whole app with all of them has had little real-world use. Expect rough edges.
+- Reminders needs you to allow access the first time. Notion needs a free integration secret and a database shared with it (Settings walks through it). Notion rows get a title, a due date (if the database has a date column) and a note, nothing else.
+- PDF export is plain text layout without the screenshots. Use Markdown if you want the structure intact.
+- Search matches words, not meaning, so "budget" will not find "pricing".
+- Bookmarks only exist for calls recorded after this feature was added.
+
 **Not built yet**
 - Direct Gmail import. In Gmail, download an email (⋮ > Download message) and drag the .eml file onto a project.
 - Windows, iPhone and iPad versions. It is a Mac app for macOS 15 or later.
 
 ## Roadmap
 
-Direct Gmail sync, per-speaker voice separation, export and delete tools, notarized distribution.
+Direct Gmail sync, voice-based speaker separation (for calls where the video does not show who is speaking), live translation, video quality setting and automatic deletion of old recordings, a retry button for failed AI steps, notarized distribution.

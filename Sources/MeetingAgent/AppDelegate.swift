@@ -73,6 +73,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             self?.model.partial[speaker] = text
         }
         recorder.transcriber = transcriber
+        recorder.watcher.onSpeaker = { [weak self] name in self?.model.speakingNow = name }
+        model.onBookmark = { [weak self] in self?.addBookmark() }
 
         detector.onChange = { [weak self] state in
             self?.handle(state)
@@ -226,6 +228,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         edit.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
         edit.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
         edit.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        edit.addItem(.separator())
+        let search = NSMenuItem(title: "Search Everything…", action: #selector(searchFromMenu), keyEquivalent: "k")
+        search.target = self
+        edit.addItem(search)
         editItem.submenu = edit
 
         let recordItem = NSMenuItem()
@@ -235,6 +241,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         toggleRecording.keyEquivalentModifierMask = [.command, .shift]
         toggleRecording.target = self
         recordMenu.addItem(toggleRecording)
+        let bookmark = NSMenuItem(title: "Bookmark This Moment", action: #selector(bookmarkFromMenu), keyEquivalent: "b")
+        bookmark.keyEquivalentModifierMask = [.command, .shift]
+        bookmark.target = self
+        recordMenu.addItem(bookmark)
         recordItem.submenu = recordMenu
 
         let windowItem = NSMenuItem()
@@ -271,6 +281,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         HotKey.register(id: 2, keyCode: 0) { [weak self] in self?.askHotKey() }          // A
         HotKey.register(id: 3, keyCode: 1) { [weak self] in self?.peekHotKey() }         // S
         HotKey.register(id: 4, keyCode: 15) { [weak self] in self?.toggleRecordingFromMenu() }   // R
+        HotKey.register(id: 5, keyCode: 11) { [weak self] in self?.addBookmark() }       // B
+    }
+
+    // MARK: - Bookmarks
+
+    @objc private func bookmarkFromMenu() { addBookmark() }
+
+    /// Marks the current moment of the call. The list shows up under "Highlights" when you open the call later.
+    private func addBookmark() {
+        guard recorder.isRecording, let folder = recorder.folder else { return }
+        let items = BookmarkStore.add(at: recorder.elapsed, in: folder)
+        model.bookmarkCount = items.count
+        Theme.tap()
+        NSSound(named: NSSound.Name("Tink"))?.play()
+        Log.write("bookmark \(items.count) at \(Transcript.clock(recorder.elapsed))")
     }
 
     private func askHotKey() {
@@ -372,6 +397,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 model.lines = []
                 model.partial = [:]
                 model.chat = []
+                model.bookmarkCount = 0
+                model.speakingNow = nil
                 model.panelTab = .now
                 model.collapsed = false
                 chatHistory = []
@@ -637,6 +664,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
     @objc private func openFromMenu() { openApp() }
     @objc private func openSettingsFromMenu() { openApp(LibraryModel.settingsKey) }
+
+    @objc private func searchFromMenu() {
+        openApp()
+        library.showSearch = true
+    }
 
     @objc private func toggleRecordingFromMenu() {
         if recorder.isRecording {

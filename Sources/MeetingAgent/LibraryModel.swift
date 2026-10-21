@@ -40,6 +40,9 @@ final class LibraryModel: ObservableObject {
     @Published var keyTest = ""
     @Published var keyTesting = false
     @Published var detailCall: CallRecord?
+    /// When a call is opened from search, the moment (in seconds) to jump to.
+    @Published var detailSeek: Double?
+    @Published var showSearch = false
 
     let memory: MemoryStore
     let knowledge: KnowledgeStore
@@ -442,6 +445,30 @@ final class LibraryModel: ObservableObject {
             throw ChatError.message("Connect the AI first (Settings).")
         }
         return try await processor.followUp(for: call, key: key)
+    }
+
+    // MARK: - Search
+
+    /// Opens whatever a search result points at.
+    func open(_ hit: SearchHit) {
+        showSearch = false
+        // Give the search sheet a moment to close before the next one opens.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [self] in
+            switch hit.target {
+            case .call(let id, let seek):
+                guard let call = memory.records.first(where: { $0.id == id }) else { return }
+                detailSeek = seek
+                detailCall = call
+            case .note(let id):
+                guard let item = knowledge.items.first(where: { $0.id == id }) else { return }
+                selection = item.client.isEmpty ? Self.generalKey : item.client
+                projectTab = .content
+            case .promises:
+                selection = Self.promisesKey
+            case .project(let name):
+                selection = name
+            }
+        }
     }
 
     static func folder(for call: CallRecord) -> URL {

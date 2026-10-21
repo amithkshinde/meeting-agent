@@ -94,6 +94,13 @@ final class CallRecorder: NSObject, SCStreamDelegate, SCStreamOutput, SCRecordin
     /// Called if capture stops without the user asking, for example when the display sleeps.
     var onUnexpectedStop: ((String) -> Void)?
     var transcriber: LiveTranscriber?
+    /// Notes who is speaking and saves screenshots when the shared screen changes.
+    let watcher = CallWatcher()
+    /// The moment capture began. Transcript stamps, bookmarks and screenshots are all measured from here.
+    private(set) var clockStart = Date()
+
+    /// Seconds since this recording began.
+    var elapsed: Double { Date().timeIntervalSince(clockStart) }
 
     private var stream: SCStream?
     private var recordingOutput: SCRecordingOutput?
@@ -161,8 +168,10 @@ final class CallRecorder: NSObject, SCStreamDelegate, SCStreamOutput, SCRecordin
         recordingOutput = output
 
         meta = Meta(app: call.app, windowTitle: call.windowTitle, started: Date(), ended: nil)
+        clockStart = Date()
         try await stream.startCapture()
-        transcriber?.begin(folder: folder)
+        transcriber?.begin(folder: folder, start: clockStart)
+        watcher.begin(folder: folder, start: clockStart)
         self.stream = stream
         Log.write("recording started: \(folder.path)")
     }
@@ -188,6 +197,7 @@ final class CallRecorder: NSObject, SCStreamDelegate, SCStreamOutput, SCRecordin
     }
 
     private func finalizeFiles() {
+        watcher.end()
         transcriber?.end()
         systemTrack?.close()
         micTrack?.close()
@@ -217,8 +227,11 @@ final class CallRecorder: NSObject, SCStreamDelegate, SCStreamOutput, SCRecordin
             systemTrack?.append(sampleBuffer)
         case .microphone:
             micTrack?.append(sampleBuffer)
+        case .screen:
+            // The picture itself is written by the recording output; this is only for looking at it.
+            watcher.offer(sampleBuffer)
         default:
-            break // video frames are written by the recording output
+            break
         }
     }
 

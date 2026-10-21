@@ -26,6 +26,10 @@
     <string>Meeting Agent reads your calendar to brief you before meetings and to name the people on a call.</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>Meeting Agent records your microphone during calls you choose to record.</string>
+    <key>NSRemindersFullAccessUsageDescription</key>
+    <string>Meeting Agent adds the promises you choose to your Reminders.</string>
+    <key>NSRemindersUsageDescription</key>
+    <string>Meeting Agent adds the promises you choose to your Reminders.</string>
     <key>NSScreenCaptureUsageDescription</key>
     <string>Meeting Agent records your screen and call audio during calls you choose to record.</string>
     <key>NSSpeechRecognitionUsageDescription</key>

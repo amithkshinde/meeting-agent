@@ -33,6 +33,9 @@ struct MainView: View {
         .sheet(item: $model.detailCall) { call in
             CallDetailSheet(model: model, call: call)
         }
+        .sheet(isPresented: $model.showSearch) {
+            SearchPalette(model: model)
+        }
         .sheet(isPresented: Binding(get: { !onboarded }, set: { _ in })) {
             OnboardingSheet(model: model) { onboarded = true }
                 .interactiveDismissDisabled()
@@ -56,6 +59,18 @@ struct MainView: View {
             set: { if let value = $0 { model.selection = value } }
         )
         return List(selection: selection) {
+            Button {
+                model.showSearch = true
+            } label: {
+                HStack {
+                    Label("Search", systemImage: "magnifyingglass")
+                    Spacer()
+                    Text("⌘K").font(.caption).foregroundStyle(.tertiary)
+                }
+            }
+            .buttonStyle(.plain)
+            .help("Search every call, note and promise (Command-K)")
+
             Label("Home", systemImage: "house").tag(LibraryModel.homeKey)
             HStack {
                 Label("Promises", systemImage: "checklist")

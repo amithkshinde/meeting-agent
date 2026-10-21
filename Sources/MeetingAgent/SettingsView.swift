@@ -12,6 +12,15 @@ struct SettingsView: View {
     @AppStorage("speechLocale") private var locale = "auto"
     @AppStorage("aiLocalOnly") private var aiLocal = false
     @AppStorage("calendarOn") private var calendarOn = true
+    @AppStorage("scriptPref") private var scriptPref = "keep"
+    @AppStorage("watchSpeakers") private var watchSpeakers = true
+    @AppStorage("watchScreens") private var watchScreens = true
+    @AppStorage("userDisplayName") private var userName = ""
+    @State private var notionToken = ""
+    @State private var notionLink = ""
+    @State private var notionStatus = ""
+    @State private var notionBusy = false
+    @State private var notionConnected = NotionService.isConfigured
 
     private struct Language: Identifiable {
         let id: String
@@ -19,7 +28,8 @@ struct SettingsView: View {
     }
 
     private var languages: [Language] {
-        [Language(id: "auto", name: "Automatic (English)")]
+        [Language(id: "auto", name: "Automatic (English)"),
+         Language(id: "hinglish", name: "Hindi and English mixed (Hinglish)")]
             + TrackTranscriber.supportedLanguages().map { Language(id: $0.id, name: $0.name) }
     }
 
@@ -29,6 +39,8 @@ struct SettingsView: View {
                 Text("Settings").font(.largeTitle.bold())
                 aiCard
                 recordingCard
+                speakersCard
+                exportCard
                 calendarCard
                 SetupChecklist(model: model, title: "Permissions")
                 shortcutsCard
@@ -144,6 +156,8 @@ struct SettingsView: View {
         ("⌃⌥ A", "Ask a question (cursor goes straight to the box)"),
         ("⌃⌥ S", "Peek at suggestions when quiet mode is on"),
         ("⌃⌥ R", "Start or stop recording"),
+        ("⌃⌥ B", "Bookmark this moment during a call"),
+        ("⌘ K", "Search every call, note and promise"),
     ]
 
     private func saveKey() {
@@ -196,11 +210,128 @@ struct SettingsView: View {
                 }
             }
             .frame(maxWidth: 360)
-            Text("Applies from your next recording. Pick Hindi or Kannada if most of the call is in it.")
+            Text("Applies from your next recording. Pick Hindi or Kannada if most of the call is in it. For people who switch between Hindi and English, choose Hinglish. Hindi and Hinglish haven't been tested on many real calls yet, so treat them as a first version.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Picker("Write Hindi in the clean transcript as", selection: $scriptPref) {
+                Text("Whatever the speech engine gave").tag("keep")
+                Text("Roman letters (Hinglish)").tag("roman")
+                Text("Devanagari (हिन्दी)").tag("devanagari")
+            }
+            .frame(maxWidth: 440)
+            Text("Used when the AI tidies the transcript after a call. Any call can also be translated into English from its Transcript tab.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .card()
+    }
+
+    // MARK: Speakers and screens
+
+    private var speakersCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Speakers and screens").font(.headline)
+            Toggle(isOn: $watchSpeakers) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Name who is speaking, from the video")
+                    Text("Reads the outline the call app draws around the active speaker, and the name on that tile. Works with Google Meet. Zoom and Teams haven't been tested yet.")
+                        .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Toggle(isOn: $watchScreens) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Save a picture when the shared screen changes")
+                    Text("Used to group feedback by screen in a design review. The pictures stay in the call's folder on this Mac.")
+                        .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            HStack {
+                Text("Your name in calls").font(.callout)
+                TextField(NSFullUserName(), text: $userName)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(maxWidth: 240)
+            }
+            Text("So your own tile is never mistaken for someone else. Leave it empty to use your Mac's name. It should match how you appear in Meet.")
+                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        }
+        .card()
+    }
+
+    // MARK: Reminders and Notion
+
+    private var exportCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Send promises elsewhere").font(.headline)
+                Spacer()
+                if notionConnected { Chip(text: "Notion connected", icon: "checkmark.circle.fill", tint: .green) }
+            }
+            Text("Reminders needs nothing to set up. Open a call, choose Share › Add promises to Reminders, and allow access the first time. Summaries can be exported as PDF or Markdown from the same menu.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if notionConnected {
+                Text("Promises can be sent to your Notion database from a call's Share menu.").font(.callout)
+                HStack {
+                    Button("Test") { testNotion() }.buttonStyle(SoftButtonStyle()).disabled(notionBusy)
+                    Button("Disconnect") {
+                        NotionService.disconnect()
+                        notionConnected = false
+                        notionStatus = ""
+                    }
+                    .buttonStyle(SoftButtonStyle())
+                }
+            } else {
+                Text("To use Notion: 1. Go to notion.so/my-integrations, make a new integration, and copy its secret. 2. Open the Notion database for your tasks, choose ••• › Connections, and add that integration. 3. Copy the database's link. Paste both below.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack {
+                    Button("Open Notion integrations") {
+                        if let url = URL(string: "https://www.notion.so/my-integrations") { NSWorkspace.shared.open(url) }
+                    }
+                    .buttonStyle(SoftButtonStyle())
+                }
+                SecureField("Integration secret", text: $notionToken).textFieldStyle(.roundedBorder).frame(maxWidth: 440)
+                TextField("Database link", text: $notionLink).textFieldStyle(.roundedBorder).frame(maxWidth: 440)
+                Button("Save and test") { saveNotion() }
+                    .buttonStyle(PrimaryButtonStyle())
+                    .disabled(notionBusy || notionToken.trimmingCharacters(in: .whitespaces).isEmpty || notionLink.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+            if !notionStatus.isEmpty {
+                Text(notionStatus).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .card()
+    }
+
+    private func saveNotion() {
+        if let problem = NotionService.save(token: notionToken, databaseLink: notionLink) {
+            notionStatus = problem
+            return
+        }
+        notionToken = ""
+        notionLink = ""
+        notionConnected = true
+        testNotion()
+    }
+
+    private func testNotion() {
+        notionBusy = true
+        notionStatus = "Checking…"
+        Task { @MainActor in
+            do {
+                let name = try await NotionService.test()
+                notionStatus = "Connected to “\(name)”."
+            } catch {
+                notionStatus = error.localizedDescription
+            }
+            notionBusy = false
+        }
     }
 
     // MARK: General
