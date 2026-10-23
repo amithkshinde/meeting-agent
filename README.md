@@ -120,6 +120,14 @@ You need Xcode or the Xcode Command Line Tools (`xcode-select --install`) to bui
 
 The cloud AI uses either a free Google Gemini key (https://aistudio.google.com/apikey) or an Anthropic Claude key (https://console.anthropic.com/settings/keys), or the Mac's built-in AI. Settings > AI assistant > Set up AI walks you through getting and pasting a key. Free Gemini keys allow only about 20 requests a day, so live suggestions slow down and stop early to leave room for the call summary. Free Google keys may let Google use what you send to improve its products, so use a paid key or the on-device option for confidential work.
 
+## License and contributing
+
+Meeting Agent is open source under the [MIT License](LICENSE). You can use it, fork it, change it and build on it, including in commercial work, as long as you keep the copyright and license notice.
+
+To build on it: fork the repository on GitHub, clone your fork, and build with `Install Meeting Agent.command` (or `scripts/build-app.sh`). Pull requests are welcome. If you share a modified build, please use your own name and app icon so people can tell it apart from this one.
+
+The software comes with no warranty. You are responsible for telling people on a call that you are recording, and for following the recording laws where you are.
+
 ## Project layout
 
 - `Sources/MeetingAgent`: the app. `AppDelegate` wires everything; `CallDetector`, `CallRecorder`, `LiveTranscriber` and `ModernTranscriber` handle calls, capture and speech; `PostCall` writes notes and promises; `CalendarService` does briefings; `Knowledge` holds projects and retrieval; `MainView`, `ProjectPage`, `PromisesView`, `SettingsView` and `PanelView` are the screens.
