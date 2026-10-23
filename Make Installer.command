@@ -1,11 +1,11 @@
 #!/bin/bash
 # Double-click this file to build an installer you can share (a single .dmg file).
 cd "$(dirname "$0")"
-echo "Building the installer. This builds for both Apple Silicon and Intel Macs and takes two to four minutes..."
+echo "Building two installers, one for Apple Silicon Macs and one for Intel Macs. This takes about four to six minutes..."
 echo
 if scripts/make-installer.sh; then
   echo
-  echo "Done. Opening the folder that holds your installer."
+  echo "Done. Opening the folder that holds your two installers."
   open dist
 else
   echo

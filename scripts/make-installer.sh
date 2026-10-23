@@ -1,5 +1,7 @@
 #!/bin/bash
-# Builds an installer you can send to someone else: dist/MeetingAgent-<version>-<chip>.dmg
+# Builds two installers you can send to someone else:
+#   dist/MeetingAgent-<version>-arm64.dmg   for Apple Silicon Macs (M1, M2, M3, M4...)
+#   dist/MeetingAgent-<version>-intel.dmg   for Intel Macs
 # Run it on your Mac (double-click "Make Installer.command" in the project folder).
 # Usage: scripts/make-installer.sh [signing identity]
 set -euo pipefail
@@ -11,30 +13,40 @@ if [ "$(uname)" != "Darwin" ]; then
 fi
 
 VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Resources/Info.plist)"
-CHIP="universal"              # runs on Apple Silicon and Intel Macs
-NAME="MeetingAgent-${VERSION}-${CHIP}"
-DMG="dist/${NAME}.dmg"
-STAGE="build/dmg"
+mkdir -p dist
 
-# 1. Build and sign the app (uses the same "Meeting Agent Dev" certificate as your own builds).
-UNIVERSAL=1 scripts/build-app.sh "$@"
-ARCHS="$(lipo -archs build/MeetingAgent.app/Contents/MacOS/MeetingAgent)"
-echo "Built for: $ARCHS"
-case "$ARCHS" in
-  *arm64*x86_64*|*x86_64*arm64*) ;;
-  *) echo "The app was not built for both chips. Copy the text above and send it to Claude."; exit 1 ;;
-esac
+# Not sure which chip you have? Apple menu > About This Mac. "Chip: Apple M..." is Apple Silicon,
+# "Processor: Intel..." is Intel.
 
-# 2. Lay out what the person will see when they open the disk image.
-rm -rf "$STAGE"
-mkdir -p "$STAGE" dist
-ditto "build/MeetingAgent.app" "$STAGE/Meeting Agent.app"
-ln -s /Applications "$STAGE/Applications"
+make_dmg() {
+  local ARCH="$1" CHIP="$2" CHIPNAME="$3" LOCALAI="$4"
+  local NAME="MeetingAgent-${VERSION}-${CHIP}"
+  local DMG="dist/${NAME}.dmg"
+  local STAGE="build/dmg-${CHIP}"
 
-cat > "$STAGE/READ ME FIRST.txt" <<'TXT'
+  echo
+  echo "=== ${CHIPNAME} installer ==="
+
+  # 1. Build and sign the app (uses the same "Meeting Agent Dev" certificate as your own builds).
+  ARCH="$ARCH" scripts/build-app.sh ${SIGN[@]+"${SIGN[@]}"}
+  local ARCHS
+  ARCHS="$(lipo -archs build/MeetingAgent.app/Contents/MacOS/MeetingAgent)"
+  echo "Built for: $ARCHS"
+  if [ "$ARCHS" != "$ARCH" ]; then
+    echo "The app was built for '$ARCHS' but '$ARCH' was expected. Copy the text above and send it to Claude."
+    exit 1
+  fi
+
+  # 2. Lay out what the person will see when they open the disk image.
+  rm -rf "$STAGE"
+  mkdir -p "$STAGE"
+  ditto "build/MeetingAgent.app" "$STAGE/Meeting Agent.app"
+  ln -s /Applications "$STAGE/Applications"
+
+  cat > "$STAGE/READ ME FIRST.txt" <<TXT
 MEETING AGENT  -  INSTALL IN 3 STEPS
 
-Works on Apple Silicon and Intel Macs running macOS 15 or later.
+This installer is for ${CHIPNAME} Macs, running macOS 15 or later.
 macOS 26 gives the best live transcript.
 
 
@@ -65,8 +77,7 @@ STEP 3.  Follow the setup inside the app (about 3 minutes)
   - Connect the AI. The app walks you through it:
       * Google Gemini: free, takes about 2 minutes to get a key
       * Claude: pay as you go, best answers
-      * This Mac: no key and no sign-up. Needs an Apple Silicon Mac
-        with Apple Intelligence, so it is not available on Intel Macs
+${LOCALAI}
 
 
 AFTER THAT
@@ -81,11 +92,20 @@ AFTER THAT
 TO REMOVE: drag Meeting Agent from Applications to the Bin.
 TXT
 
-# 3. Make the disk image and check it.
-rm -f "$DMG"
-hdiutil create -volname "Meeting Agent" -srcfolder "$STAGE" -ov -format UDZO "$DMG" >/dev/null
-hdiutil verify "$DMG" >/dev/null
+  # 3. Make the disk image and check it.
+  rm -f "$DMG"
+  hdiutil create -volname "Meeting Agent" -srcfolder "$STAGE" -ov -format UDZO "$DMG" >/dev/null
+  hdiutil verify "$DMG" >/dev/null
+  echo "Ready: $DMG  ($(du -h "$DMG" | cut -f1))"
+}
+
+SIGN=("$@")
+
+make_dmg arm64 arm64 "Apple Silicon (M1, M2, M3, M4)" "      * This Mac: no key and no sign-up. Uses Apple Intelligence on this Mac."
+make_dmg x86_64 intel "Intel" "      * This Mac: not available on Intel Macs. Use Gemini or Claude instead."
 
 echo
-echo "Installer ready: $DMG  ($(du -h "$DMG" | cut -f1))"
-echo "Send that one file. The READ ME FIRST.txt inside it tells the person what to do."
+echo "Both installers are in the dist folder:"
+ls -lh dist/MeetingAgent-${VERSION}-*.dmg
+echo
+echo "Send the arm64 one to people with Apple Silicon Macs, and the intel one to people with Intel Macs."
