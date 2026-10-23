@@ -104,6 +104,7 @@ struct MainView: View {
             }
 
             Section {
+                Label("Feedback", systemImage: "bubble.left.and.text.bubble.right").tag(LibraryModel.feedbackKey)
                 Label("Settings", systemImage: "gearshape").tag(LibraryModel.settingsKey)
             }
         }
@@ -122,6 +123,8 @@ struct MainView: View {
             SettingsView(model: model, agent: agent)
         case LibraryModel.promisesKey:
             PromisesView(model: model)
+        case LibraryModel.feedbackKey:
+            FeedbackView()
         default:
             ProjectPage(model: model)
         }

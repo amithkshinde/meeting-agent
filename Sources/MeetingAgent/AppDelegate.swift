@@ -268,6 +268,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         let replay = NSMenuItem(title: "Show the welcome and setup again", action: #selector(replaySetup), keyEquivalent: "")
         replay.target = self
         helpMenu.addItem(replay)
+        let feedback = NSMenuItem(title: "Send Feedback…", action: #selector(openFeedbackFromMenu), keyEquivalent: "")
+        feedback.target = self
+        helpMenu.addItem(feedback)
         helpItem.submenu = helpMenu
         NSApp.helpMenu = helpMenu
 
@@ -664,6 +667,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
     @objc private func openFromMenu() { openApp() }
     @objc private func openSettingsFromMenu() { openApp(LibraryModel.settingsKey) }
+    @objc private func openFeedbackFromMenu() { openApp(LibraryModel.feedbackKey) }
 
     @objc private func searchFromMenu() {
         openApp()

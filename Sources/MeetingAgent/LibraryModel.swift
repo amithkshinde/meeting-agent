@@ -14,6 +14,7 @@ final class LibraryModel: ObservableObject {
     static let unassignedKey = "§unassigned"
     static let settingsKey = "§settings"
     static let promisesKey = "§promises"
+    static let feedbackKey = "§feedback"
 
     @Published var selection = LibraryModel.homeKey {
         didSet {
@@ -100,6 +101,7 @@ final class LibraryModel: ObservableObject {
         case Self.unassignedKey: return "Unassigned calls"
         case Self.settingsKey: return "Settings"
         case Self.promisesKey: return "Promises"
+        case Self.feedbackKey: return "Feedback"
         default: return selection
         }
     }
@@ -112,7 +114,7 @@ final class LibraryModel: ObservableObject {
         allCalls = everyCall
         unassignedCount = everyCall.filter { $0.client == MemoryStore.unassigned }.count
         switch selection {
-        case Self.allKey, Self.homeKey, Self.settingsKey, Self.promisesKey:
+        case Self.allKey, Self.homeKey, Self.settingsKey, Self.promisesKey, Self.feedbackKey:
             items = everyItem
             calls = everyCall
         case Self.generalKey:

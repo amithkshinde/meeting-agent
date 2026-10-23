@@ -120,6 +120,16 @@ You need Xcode or the Xcode Command Line Tools (`xcode-select --install`) to bui
 
 The cloud AI uses either a free Google Gemini key (https://aistudio.google.com/apikey) or an Anthropic Claude key (https://console.anthropic.com/settings/keys), or the Mac's built-in AI. Settings > AI assistant > Set up AI walks you through getting and pasting a key. Free Gemini keys allow only about 20 requests a day, so live suggestions slow down and stop early to leave room for the call summary. Free Google keys may let Google use what you send to improve its products, so use a paid key or the on-device option for confidential work.
 
+## Feedback
+
+Open **Feedback** in the sidebar (or **Help > Send Feedback…**). Pick a type, write a note, and choose whether to
+put your name on it. Giving a name and email is optional but welcome, because it lets me write back if I want to
+understand something or talk it through. You can also stay fully anonymous. Nothing from your calls is ever
+included: only your note, and optionally the app version, macOS version and chip.
+
+Prefer GitHub? [Open an issue](https://github.com/amithkshinde/meeting-agent/issues/new/choose). If you fork this
+project and want feedback delivered to you, see [docs/FEEDBACK-SETUP.md](docs/FEEDBACK-SETUP.md).
+
 ## License and contributing
 
 Meeting Agent is open source under the [MIT License](LICENSE). You can use it, fork it, change it and build on it, including in commercial work, as long as you keep the copyright and license notice.
