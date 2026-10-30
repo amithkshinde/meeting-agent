@@ -21,30 +21,30 @@ open build/MeetingAgent.app
 
 ## Installers (for sharing)
 
-Two ready-made installers are in the **main folder** of this repository, next to this README. There is no `dist` folder on GitHub. `dist` is only the folder on your own Mac where **Make Installer.command** saves a new build.
+Ready-made installers are in the **main folder** of this repository, next to this README. There is no `dist` folder on GitHub. `dist` is only the folder on your own Mac where **Make Installer.command** saves new builds.
 
 | File | Which Macs it is for |
 |---|---|
-| `MeetingAgent-0.0.1-universal.dmg` | **Use this one for everyone.** It runs on both Apple Silicon (M1 or newer) and Intel Macs, macOS 15 or later. About 3 MB. |
-| `MeetingAgent-0.0.1-arm64.dmg` | Apple Silicon Macs only. It is smaller (about 1.8 MB) and does nothing the universal file doesn't. It will not open on an Intel Mac. |
+| `MeetingAgent-<version>-arm64.dmg` | **Apple Silicon Macs** (M1, M2, M3, M4 and newer), macOS 15 or later. |
+| `MeetingAgent-<version>-intel.dmg` | **Intel Macs**, macOS 15 or later. |
 
-Not sure which Mac you have? Apple menu > About This Mac. If it says "Chip: Apple M…", it is Apple Silicon. If it says "Processor: Intel…", it is Intel. When in doubt, use the universal file.
+Not sure which Mac you have? Apple menu > About This Mac. If it says "Chip: Apple M…", download the **arm64** file. If it says "Processor: Intel…", download the **intel** file. The older `MeetingAgent-0.0.1-universal.dmg` still works on both, but it does not include the newest features.
 
 ### How to install it
 
-1. **Download the file.** On GitHub, click the `.dmg` file name, then click the download button at the top right. Or use this direct link for the universal file: https://github.com/amithkshinde/meeting-agent/raw/main/MeetingAgent-0.0.1-universal.dmg
+1. **Download the file.** On GitHub, click the `.dmg` file name, then click the download button at the top right.
 2. **Open it** by double-clicking the downloaded `.dmg`. A window opens with the app, an Applications folder shortcut and a `READ ME FIRST.txt`.
 3. **Drag Meeting Agent onto Applications.**
 4. **Open it the first time.** macOS shows a warning because the app is not signed with an Apple Developer ID. Open Meeting Agent from Applications and click Done. Then go to System Settings > Privacy & Security, scroll to the Security section, click Open Anyway, and enter your Mac password. You only do this once. (Shortcut: in the Terminal, run `xattr -dr com.apple.quarantine "/Applications/Meeting Agent.app"` and open the app normally.)
 5. **Follow the setup inside the app** (about three minutes): allow Screen Recording, Microphone and Speech Recognition, then connect the AI. The app explains how to get a free Gemini key or a Claude key, or you can use the Mac's built-in AI (Apple Silicon only).
 
-### Making a fresh installer
+### Making fresh installers
 
-The `.dmg` files in this repository are snapshots of version 0.0.1 and do not update by themselves. After you change the code, make a new one on your Mac:
+The `.dmg` files in this repository are snapshots and do not update by themselves. After you change the code, make new ones on your Mac:
 
-1. Double-click **Make Installer.command** (also in the main folder). It takes two to four minutes.
-2. A folder called `dist` opens on your Mac with a new `MeetingAgent-<version>-universal.dmg` inside. That is the file to share. This `dist` folder stays on your Mac and is not uploaded to GitHub.
-3. To keep it on GitHub, upload the new file next to this README, replacing the old one.
+1. Double-click **Make Installer.command** (also in the main folder). It builds both chips and takes four to six minutes.
+2. A folder called `dist` opens on your Mac with two new files inside: `MeetingAgent-<version>-arm64.dmg` and `MeetingAgent-<version>-intel.dmg`. These are the files to share. The `dist` folder stays on your Mac and is not uploaded to GitHub.
+3. To keep them on GitHub, upload the new files next to this README.
 
 ## Run it from the Terminal
 
@@ -62,6 +62,7 @@ If you get "permission denied" on a script, run this once: `chmod +x scripts/*.s
 | Build, copy into Applications and open | `scripts/install.sh` |
 | Build the shareable installer (Apple Silicon and Intel), saved in `dist/` | `scripts/make-installer.sh` |
 | Build only a universal app, no disk image | `UNIVERSAL=1 scripts/build-app.sh` |
+| Build for one chip only | `ARCH=arm64 scripts/build-app.sh` or `ARCH=x86_64 scripts/build-app.sh` |
 | One-time: create the signing certificate so macOS keeps permissions between builds | `scripts/setup-signing.sh` |
 | Run the app with its messages shown in the Terminal | `build/MeetingAgent.app/Contents/MacOS/MeetingAgent` |
 | Watch the log while it runs | `tail -f ~/Movies/MeetingAgent/spike-log.txt` |
