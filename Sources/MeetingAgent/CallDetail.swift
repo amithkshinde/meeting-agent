@@ -50,6 +50,24 @@ final class PlayerHolder: ObservableObject {
     init(url: URL?) { model = PlayerModel(url: url) }
 }
 
+/// The video picture. This wraps the classic AppKit player on purpose: SwiftUI's own `VideoPlayer`
+/// crashes at launch in apps built with Swift Package Manager (its AVKit overlay fails to load).
+struct PlayerView: NSViewRepresentable {
+    let player: AVPlayer
+
+    func makeNSView(context: Context) -> AVPlayerView {
+        let view = AVPlayerView()
+        view.player = player
+        view.controlsStyle = .inline
+        view.showsFullScreenToggleButton = false
+        return view
+    }
+
+    func updateNSView(_ view: AVPlayerView, context: Context) {
+        if view.player !== player { view.player = player }
+    }
+}
+
 /// Picture of a saved screen, loaded once.
 struct ScreenThumb: View {
     let url: URL
@@ -257,7 +275,7 @@ struct CallDetailSheet: View {
         VStack(alignment: .leading, spacing: 12) {
             Group {
                 if let avPlayer = player.player {
-                    VideoPlayer(player: avPlayer)
+                    PlayerView(player: avPlayer)
                         .aspectRatio(1470.0 / 956.0, contentMode: .fit)
                 } else {
                     ZStack {
