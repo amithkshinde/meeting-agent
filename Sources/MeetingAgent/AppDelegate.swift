@@ -646,7 +646,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         switch action {
         case "keep": keepRecording()
         case "end": confirmEnd()
-        case "update": UpdateChecker.shared.download()
+        case "update": Task { @MainActor in UpdateChecker.shared.download() }
         default: Log.warn("app", "Unknown action \(action)")
         }
     }
