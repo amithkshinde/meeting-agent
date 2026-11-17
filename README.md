@@ -44,7 +44,7 @@ The `.dmg` files in this repository are snapshots and do not update by themselve
 
 1. Double-click **Make Installer.command** (also in the main folder). It builds both chips and takes four to six minutes.
 2. A folder called `dist` opens on your Mac with two new files inside: `MeetingAgent-<version>-arm64.dmg` and `MeetingAgent-<version>-intel.dmg`. These are the files to share. The `dist` folder stays on your Mac and is not uploaded to GitHub.
-3. To keep them on GitHub, upload the new files next to this README.
+3. To send an update to people who already have the app, publish a GitHub Release with both files attached. The app tells them and offers a one-click download. Step by step: `docs/UPDATING.md`.
 
 ## Run it from the Terminal
 
