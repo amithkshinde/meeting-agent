@@ -4,7 +4,7 @@ import Foundation
 enum Translation {
     static let system = """
     You translate call transcript lines into clear, natural English. Each line looks like "[mm:ss] Speaker: text". \
-    The speech may be Hindi (in Devanagari or Roman letters), Hinglish, Kannada, or English. \
+    The speech may be in English or another language. \
     Translate the text of each line, and keep the timestamp and the speaker label exactly as they are. \
     Lines that are already English stay as they are. Keep names, product names and numbers. \
     Keep every line, in the same order. Do not summarise or add anything. Reply with the lines only, nothing before or after.

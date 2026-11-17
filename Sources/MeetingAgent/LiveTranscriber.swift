@@ -49,7 +49,7 @@ final class TrackTranscriber {
     /// The language chosen in the menu, or the best English that can run on this Mac.
     static func makeRecognizer(speaker: String) -> SFSpeechRecognizer? {
         var chosen = UserDefaults.standard.string(forKey: "speechLocale") ?? "auto"
-        if chosen == "hinglish" { chosen = "hi-IN" }   // the Hindi engine copes best with Hindi and English mixed
+        if chosen == "hinglish" || chosen == "hi-IN" || chosen == "kn-IN" { chosen = "auto" }   // no longer offered
         var candidates: [SFSpeechRecognizer] = []
         if chosen != "auto", let picked = SFSpeechRecognizer(locale: Locale(identifier: chosen)) {
             candidates = [picked]
@@ -63,10 +63,9 @@ final class TrackTranscriber {
 
     /// Languages offered in the menu: the ones Apple's recogniser supports on this Mac.
     static func supportedLanguages() -> [(id: String, name: String)] {
-        // These three are always listed. If Apple can't do one on this Mac, the log says so.
-        let always = ["en-IN", "hi-IN", "kn-IN"]
-        let others = ["en-US", "en-GB", "mr-IN", "ta-IN", "te-IN", "bn-IN", "gu-IN", "ml-IN",
-                      "ur-IN", "es-ES", "fr-FR", "de-DE", "ja-JP", "zh-CN"]
+        // Live captions use Apple's engine. The final transcript uses Parakeet, which picks the language itself.
+        let always = ["en-IN"]
+        let others = ["en-US", "en-GB", "es-ES", "fr-FR", "de-DE", "it-IT", "pt-PT", "nl-NL"]
         let supported = Set(SFSpeechRecognizer.supportedLocales().map { $0.identifier.replacingOccurrences(of: "_", with: "-") })
         let ids = always + others.filter { supported.contains($0) }
         return ids.map { ($0, Locale(identifier: "en").localizedString(forIdentifier: $0) ?? $0) }

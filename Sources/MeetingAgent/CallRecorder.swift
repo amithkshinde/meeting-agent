@@ -57,7 +57,7 @@ final class AudioTrackWriter {
                 }
                 try file?.write(from: buffer)
             } catch {
-                Log.write("\(name) track write failed: \(error.localizedDescription)")
+                Log.error("recorder", "\(name) audio write failed: \(error.localizedDescription)")
             }
         }
     }
@@ -94,6 +94,8 @@ final class CallRecorder: NSObject, SCStreamDelegate, SCStreamOutput, SCRecordin
     /// Called if capture stops without the user asking, for example when the display sleeps.
     var onUnexpectedStop: ((String) -> Void)?
     var transcriber: LiveTranscriber?
+    /// Counts the sound and picture that arrive, so a stuck capture can be noticed.
+    let activity = ActivityTracker()
     /// Notes who is speaking and saves screenshots when the shared screen changes.
     let watcher = CallWatcher()
     /// The moment capture began. Transcript stamps, bookmarks and screenshots are all measured from here.
@@ -152,8 +154,15 @@ final class CallRecorder: NSObject, SCStreamDelegate, SCStreamOutput, SCRecordin
         let mic = AudioTrackWriter(url: folder.appendingPathComponent("mic.m4a"), name: "mic")
         systemTrack = system
         micTrack = mic
-        system.onBuffer = { [weak self] buffer in self?.transcriber?.appendSystem(buffer) }
-        mic.onBuffer = { [weak self] buffer in self?.transcriber?.appendMic(buffer) }
+        activity.reset()
+        system.onBuffer = { [weak self] buffer in
+            self?.activity.note(.system, rms: AudioLevel.rms(buffer))
+            self?.transcriber?.appendSystem(buffer)
+        }
+        mic.onBuffer = { [weak self] buffer in
+            self?.activity.note(.mic, rms: AudioLevel.rms(buffer))
+            self?.transcriber?.appendMic(buffer)
+        }
 
         try stream.addStreamOutput(self, type: .screen, sampleHandlerQueue: sampleQueue)
         try stream.addStreamOutput(self, type: .audio, sampleHandlerQueue: sampleQueue)
@@ -173,7 +182,7 @@ final class CallRecorder: NSObject, SCStreamDelegate, SCStreamOutput, SCRecordin
         transcriber?.begin(folder: folder, start: clockStart)
         watcher.begin(folder: folder, start: clockStart)
         self.stream = stream
-        Log.write("recording started: \(folder.path)")
+        Log.info("recorder", "Capture started (\(configuration.width)x\(configuration.height), HEVC, \(call.app)) in \(folder.lastPathComponent)")
     }
 
     /// Stops capture, closes the files and returns the folder they were saved in.
@@ -186,7 +195,7 @@ final class CallRecorder: NSObject, SCStreamDelegate, SCStreamOutput, SCRecordin
         do {
             try await stream.stopCapture()
         } catch {
-            Log.write("stopCapture reported: \(error.localizedDescription)")
+            Log.warn("recorder", "stopCapture reported: \(error.localizedDescription)")
         }
         // Give the MP4 writer a moment to finish the file.
         try? await Task.sleep(nanoseconds: 1_500_000_000)
@@ -216,7 +225,7 @@ final class CallRecorder: NSObject, SCStreamDelegate, SCStreamOutput, SCRecordin
         }
         meta = nil
         if let folder { try? FileManager.default.removeItem(at: folder.appendingPathComponent("recording.lock")) }
-        Log.write("recording files closed: \(folder?.path ?? "?")")
+        Log.info("recorder", "Files closed in \(folder?.lastPathComponent ?? "?"). Received: \(activity.summary())")
     }
 
     // MARK: - SCStreamOutput
@@ -229,6 +238,7 @@ final class CallRecorder: NSObject, SCStreamDelegate, SCStreamOutput, SCRecordin
             micTrack?.append(sampleBuffer)
         case .screen:
             // The picture itself is written by the recording output; this is only for looking at it.
+            activity.note(.screen)
             watcher.offer(sampleBuffer)
         default:
             break
@@ -238,26 +248,29 @@ final class CallRecorder: NSObject, SCStreamDelegate, SCStreamOutput, SCRecordin
     // MARK: - SCStreamDelegate
 
     func stream(_ stream: SCStream, didStopWithError error: Error) {
+        let ns = error as NSError
+        let described = CaptureErrorNames.describe(domain: ns.domain, code: ns.code, message: error.localizedDescription)
         // macOS can send this while we are stopping on purpose. Only treat it as a problem if the
         // stream was still meant to be running.
         guard !stopping, self.stream != nil else {
-            Log.write("ignored stream-stop notice during normal stop: \(error.localizedDescription)")
+            Log.info("recorder", "Stream-stop notice during a normal stop: \(described)")
             return
         }
-        Log.write("stream stopped unexpectedly: \(error.localizedDescription)")
+        Log.error("recorder", "Capture stopped by macOS after \(Int(elapsed)) s: \(described). Received: \(activity.summary())")
         self.stream = nil
         finalizeFiles()
-        onUnexpectedStop?(error.localizedDescription)
+        onUnexpectedStop?(described)
     }
 
     // MARK: - SCRecordingOutputDelegate
 
     func recordingOutput(_ recordingOutput: SCRecordingOutput, didFailWithError error: Error) {
-        Log.write("screen recording failed: \(error.localizedDescription)")
+        let ns = error as NSError
+        Log.error("recorder", "The screen video writer failed: \(CaptureErrorNames.describe(domain: ns.domain, code: ns.code, message: error.localizedDescription))")
     }
 
     func recordingOutputDidFinishRecording(_ recordingOutput: SCRecordingOutput) {
-        Log.write("screen file finalised")
+        Log.info("recorder", "Screen video file finalised")
     }
 
     // MARK: - Helpers
@@ -278,5 +291,36 @@ final class CallRecorder: NSObject, SCStreamDelegate, SCStreamOutput, SCRecordin
         )
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         return folder
+    }
+}
+
+/// How loud a buffer is, from 0 to 1.
+enum AudioLevel {
+    static func rms(_ buffer: AVAudioPCMBuffer) -> Float {
+        let frames = Int(buffer.frameLength)
+        guard frames > 0 else { return 0 }
+        if let channels = buffer.floatChannelData {
+            let data = channels[0]
+            var sum: Float = 0
+            // Look at up to 2,000 evenly spaced samples; that is plenty to tell sound from silence.
+            let step = max(1, frames / 2000)
+            var count = 0
+            var index = 0
+            while index < frames { sum += data[index] * data[index]; count += 1; index += step }
+            return count == 0 ? 0 : (sum / Float(count)).squareRoot()
+        }
+        if let channels = buffer.int16ChannelData {
+            let data = channels[0]
+            var sum: Float = 0
+            let step = max(1, frames / 2000)
+            var count = 0
+            var index = 0
+            while index < frames {
+                let value = Float(data[index]) / 32768
+                sum += value * value; count += 1; index += step
+            }
+            return count == 0 ? 0 : (sum / Float(count)).squareRoot()
+        }
+        return 0
     }
 }

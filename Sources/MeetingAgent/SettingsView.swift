@@ -12,7 +12,6 @@ struct SettingsView: View {
     @AppStorage("speechLocale") private var locale = "auto"
     @AppStorage("aiLocalOnly") private var aiLocal = false
     @AppStorage("calendarOn") private var calendarOn = true
-    @AppStorage("scriptPref") private var scriptPref = "keep"
     @AppStorage("watchSpeakers") private var watchSpeakers = true
     @AppStorage("watchScreens") private var watchScreens = true
     @AppStorage("userDisplayName") private var userName = ""
@@ -28,8 +27,7 @@ struct SettingsView: View {
     }
 
     private var languages: [Language] {
-        [Language(id: "auto", name: "Automatic (English)"),
-         Language(id: "hinglish", name: "Hindi and English mixed (Hinglish)")]
+        [Language(id: "auto", name: "Automatic (English)")]
             + TrackTranscriber.supportedLanguages().map { Language(id: $0.id, name: $0.name) }
     }
 
@@ -39,6 +37,7 @@ struct SettingsView: View {
                 Text("Settings").font(.largeTitle.bold())
                 aiCard
                 recordingCard
+                healthCard
                 speakersCard
                 exportCard
                 calendarCard
@@ -204,29 +203,26 @@ struct SettingsView: View {
                 }
             }
 
-            Picker("Spoken language", selection: $locale) {
+            Picker("Live captions language", selection: $locale) {
                 ForEach(languages) { language in
                     Text(language.name).tag(language.id)
                 }
             }
             .frame(maxWidth: 360)
-            Text("Applies from your next recording. Pick Hindi or Kannada if most of the call is in it. For people who switch between Hindi and English, choose Hinglish. Hindi and Hinglish haven't been tested on many real calls yet, so treat them as a first version.")
+            Text("Only for the captions you see during a call. After the call, Parakeet writes the final transcript and works out the language itself (English and 24 other European languages). Hindi, Hinglish and Kannada are not supported.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Picker("Write Hindi in the clean transcript as", selection: $scriptPref) {
-                Text("Whatever the speech engine gave").tag("keep")
-                Text("Roman letters (Hinglish)").tag("roman")
-                Text("Devanagari (हिन्दी)").tag("devanagari")
-            }
-            .frame(maxWidth: 440)
-            Text("Used when the AI tidies the transcript after a call. Any call can also be translated into English from its Transcript tab.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            ParakeetStatusRow()
         }
         .card()
+    }
+
+    // MARK: Health
+
+    private var healthCard: some View {
+        HealthCard()
     }
 
     // MARK: Speakers and screens

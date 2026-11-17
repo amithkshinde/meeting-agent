@@ -433,7 +433,7 @@ struct CallDetailSheet: View {
                     Button("Translate to English") { translate() }
                         .buttonStyle(SoftButtonStyle())
                         .disabled(!busy.isEmpty || lines.isEmpty)
-                        .help("Useful for Hindi, Hinglish or Kannada calls. The original stays as it is.")
+                        .help("Useful when part of the call was in another language. The original stays as it is.")
                 }
             }
             if hasVideo {

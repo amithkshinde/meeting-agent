@@ -41,9 +41,8 @@ final class CallProcessor {
     static var cleanSystem: String {
         """
     You fix the output of automatic speech recognition for a call transcript. Each line looks like "[mm:ss] You: text" or "[mm:ss] Them: text". \
-    The speech is English, Hindi, or a mix of both (Hinglish), and sometimes Kannada. \
+    The speech is mostly English, and sometimes another European language. \
     Fix obvious recognition mistakes, the spelling of names and numbers, punctuation and capital letters, using the other lines and the names of the people on the call for context. \
-    \(CallProcessor.scriptInstruction) \
     Keep every line, in the same order, with the same timestamp. Do not summarise, translate, add or remove sentences, and do not guess: if you are unsure, leave the words as they are. \
     Each line starts with a speaker label: "You", "Them", or a person's name. Keep every label exactly as written. \
     If exactly one other person was on the call, you may write their name instead of "Them". \
@@ -58,18 +57,6 @@ final class CallProcessor {
     "text" is under 20 words and says what will be done. "due" is a date as YYYY-MM-DD worked out from the call date (for example "by Friday"), or an empty string if no date was given. \
     At most 12 items. Never invent anything. If there are no promises, return {"items": []}.
     """
-
-    /// How Hindi should be written in the cleaned transcript. Set in Settings.
-    static var scriptInstruction: String {
-        switch UserDefaults.standard.string(forKey: "scriptPref") ?? "keep" {
-        case "roman":
-            return "Write every Hindi word in Roman letters (Hinglish), the way people type on a phone, for example \"kal meeting hai\". Turn any Devanagari into Roman letters. Leave English words as they are."
-        case "devanagari":
-            return "Write Hindi words in Devanagari. Leave English words in English."
-        default:
-            return "Keep the same script the line already uses: Hindi in Roman letters stays in Roman letters, Devanagari stays Devanagari."
-        }
-    }
 
     /// The user's own name as the call app would show it, so their tile is never mistaken for someone else.
     static var userName: String {
@@ -109,6 +96,20 @@ final class CallProcessor {
         Task { @MainActor in
             defer { self.agent.summarizing = false }
             if wait { try? await Task.sleep(nanoseconds: 4_000_000_000) }
+
+            // 0. Parakeet listens to the two audio tracks and writes the transcript. If it can't, the live transcript stays.
+            if FileManager.default.fileExists(atPath: folder.appendingPathComponent("system.m4a").path)
+                || FileManager.default.fileExists(atPath: folder.appendingPathComponent("mic.m4a").path) {
+                let firstTime = !ParakeetEngine.shared.isReady
+                self.agent.raise(AppAlert(id: "transcribing", message: firstTime
+                    ? "Transcribing with Parakeet. The first time it downloads the speech model (about 480 MB), so this can take a few minutes."
+                    : "Transcribing this call with Parakeet…", isInfo: true))
+                let done = await ParakeetEngine.shared.transcribeCall(folder: folder, youName: "You")
+                self.agent.clearAlert("transcribing")
+                if !done, case .failed(let why) = ParakeetEngine.shared.state {
+                    self.agent.raise(AppAlert(id: "parakeet-failed", message: "Parakeet isn't available (\(why)), so this call uses the live transcript. It will try again on the next call.", button: "Details", section: LibraryModel.settingsKey, isInfo: true))
+                }
+            }
 
             CallProcessor.attributeSpeakers(folder: folder)
             let raw = (try? String(contentsOf: folder.appendingPathComponent("transcript.txt"), encoding: .utf8)) ?? ""

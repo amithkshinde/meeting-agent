@@ -44,6 +44,11 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/MeetingAgent"
 cp "Resources/Info.plist" "$APP/Contents/Info.plist"
 
+# Libraries the app uses can ship their own resource bundles. Copy them in so nothing is missing at run time.
+find .build -maxdepth 4 -path "*/release/*" -name "*.bundle" -not -path "*/Intermediates*" 2>/dev/null | while read -r BUNDLE; do
+  cp -R "$BUNDLE" "$APP/Contents/Resources/" 2>/dev/null || true
+done
+
 # App icon: turn Resources/AppIcon.png into an .icns file (skipped quietly if the tools are missing).
 if [ -f "Resources/AppIcon.png" ] && command -v sips >/dev/null 2>&1 && command -v iconutil >/dev/null 2>&1; then
   ICONSET="build/AppIcon.iconset"

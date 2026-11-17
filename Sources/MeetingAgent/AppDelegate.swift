@@ -44,6 +44,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private var dismissedCall: DetectedCall?
     private var lastFolder: URL?
     private var manualRecording = false
+    private var wrapUp = WrapUp()
+    private var wrapUpTimer: Timer?
+    private var wrapUpWarnings = 0
+    private var currentLedgerId: String?
+    private var currentCall: DetectedCall?
+    private var resumeCount = 0
+    private var lastSleepStop: (call: DetectedCall, at: Date, id: String)?
+    private var lowDiskShown = false
 
     private var autoRecord: Bool {
         get { UserDefaults.standard.bool(forKey: "autoRecord") }
@@ -52,6 +60,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if offerMoveToApplications() { return }
+        let uncleanExit = Log.startSession()
         if Bundle.main.object(forInfoDictionaryKey: "CFBundleIconFile") == nil {
             NSApp.applicationIconImage = AppIcon.make()
         }
@@ -87,7 +96,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         registerHotKeys()
         observeSleep()
         recoverInterrupted()
-        Log.write("Meeting Agent started. Auto-record is \(autoRecord ? "on" : "off").")
+        let cutOff = Health.ledger.closeOpenAsCrashed()
+        Log.info("app", "Meeting Agent started. Auto-record is \(autoRecord ? "on" : "off").")
+        if uncleanExit != nil || !cutOff.isEmpty {
+            for entry in cutOff {
+                Log.error("recorder", "Recording \(entry.id) was cut off by a crash or force quit after about \(Int(entry.seconds / 60)) min")
+            }
+            model.raise(AppAlert(
+                id: "crashed",
+                message: cutOff.isEmpty
+                    ? "Meeting Agent closed unexpectedly last time. It has been noted in the log. If it keeps happening, send a report."
+                    : "Meeting Agent closed unexpectedly during your last call. I kept what was recorded and I'm writing the notes. It has been logged. Please send a report so it can be fixed.",
+                button: "Send report",
+                section: LibraryModel.settingsKey
+            ))
+        }
+        Task { await ParakeetEngine.shared.prepare() }
 
         // Show the main window on a normal launch. When macOS starts the app at login, stay quiet.
         if SMAppService.mainApp.status != .enabled { openApp() }
@@ -102,6 +126,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        if let id = currentLedgerId {
+            Health.ledger.finish(id: id, reason: .quit, detail: "The app was quit while recording.")
+            currentLedgerId = nil
+        }
+        defer { Log.endSession() }
         // Best effort: stop capture so the files are closed properly.
         // Detached so it doesn't need the main thread, which is waiting right here.
         let done = DispatchSemaphore(value: 0)
@@ -320,10 +349,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
     private func observeSleep() {
         NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
-            guard let self, self.recorder.isRecording else { return }
-            Log.write("the Mac is going to sleep: stopping the recording")
-            self.endRecording()
-            self.model.raise(AppAlert(id: "sleep", message: "Recording stopped because your Mac went to sleep. Everything up to then was saved.", isInfo: true))
+            guard let self, self.recorder.isRecording else {
+                Log.info("power", "The Mac is going to sleep (not recording)")
+                return
+            }
+            Log.warn("power", "The Mac is going to sleep while recording; stopping and saving")
+            if let call = self.currentCall, let id = self.currentLedgerId { self.lastSleepStop = (call, Date(), id) }
+            self.endRecording(reason: .sleep, detail: "The Mac went to sleep.")
+            self.model.raise(AppAlert(id: "sleep", message: "Recording stopped because your Mac went to sleep. Everything up to then was saved. If the call is still going when it wakes, I'll start again.", isInfo: true))
+        }
+        NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
+            Log.info("power", "The Mac woke up")
+            // Give the call app and the network a few seconds, then carry on if the call is still there.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in
+                guard let self, let slept = self.lastSleepStop, Date().timeIntervalSince(slept.at) < 30 * 60 else { return }
+                self.lastSleepStop = nil
+                guard !self.recorder.isRecording, case .active(let call) = self.detector.state else { return }
+                Log.info("power", "The call is still going after waking, so recording again")
+                self.beginRecording(call, manual: false, resumeOf: slept.id)
+            }
         }
     }
 
@@ -368,6 +412,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private func handle(_ state: CallState) {
         switch state {
         case .active(let call):
+            if wrapUp.isWrappingUp { cancelWrapUp("the call was detected again") }
             guard !recorder.isRecording, call != dismissedCall else { return }
             if autoRecord {
                 beginRecording(call, manual: false)
@@ -378,7 +423,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         case .idle:
             dismissedCall = nil
             if recorder.isRecording, !manualRecording {
-                endRecording()
+                beginWrapUp()
             } else if case .callFound = model.state {
                 model.client = ""
                 model.state = .idle
@@ -386,8 +431,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         }
     }
 
-    private func beginRecording(_ call: DetectedCall, manual: Bool) {
+    private func beginRecording(_ call: DetectedCall, manual: Bool, resumeOf: String? = nil) {
         guard !recorder.isRecording else { return }
+        if resumeOf == nil { resumeCount = 0 }
+        let free = Diagnostics.freeBytes(at: Log.root)
+        if case .critical(let bytes) = DiskGuard.verdict(freeBytes: free) {
+            Log.error("recorder", "Not starting: only \(Diagnostics.gigabytes(bytes)) of disk space is free")
+            model.state = .error("There is only \(Diagnostics.gigabytes(bytes)) of free space on this Mac, which is too little to record safely. Free up some space and try again.")
+            return
+        }
         Task { @MainActor in
             do {
                 let speechAllowed = await LiveTranscriber.requestAuthorization()
@@ -414,6 +466,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
                 try await recorder.start(call: call)
                 manualRecording = manual
+                currentCall = call
+                wrapUpWarnings = 0
+                if let folder = recorder.folder {
+                    let id = folder.lastPathComponent
+                    currentLedgerId = id
+                    Health.ledger.begin(LedgerEntry(id: id, app: call.app, startedAt: Date(), automatic: !manual, resumedFrom: resumeOf, freeGBAtStart: free.map { Double($0) / 1_073_741_824 }))
+                    Log.info("recorder", "Recording started: \(manual ? "manual" : "automatic"), \(call.app), window \"\(call.windowTitle)\"\(resumeOf != nil ? ", continuing after an interruption" : "")")
+                }
                 detector.isRecording = true
                 model.state = .recording(call: call, since: Date())
                 currentApp = call.app
@@ -436,19 +496,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 setStatusIcon(recording: true)
                 Theme.tap()
             } catch {
-                Log.write("could not start recording: \(error.localizedDescription)")
+                Log.error("recorder", "Could not start recording: \(error.localizedDescription)")
+                // A failed start can leave an empty folder with a lock file, which the next launch would treat as a crash.
+                if let folder = recorder.folder {
+                    try? FileManager.default.removeItem(at: folder.appendingPathComponent("recording.lock"))
+                    if ((try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []).isEmpty {
+                        try? FileManager.default.removeItem(at: folder)
+                    }
+                }
                 model.state = .error(error.localizedDescription)
             }
         }
     }
 
-    private func endRecording() {
+    private func endRecording(reason: EndReason = .manualStop, detail: String = "") {
+        cancelWrapUp(nil)
+        let ledgerId = currentLedgerId
+        currentLedgerId = nil
+        let length = Int(recorder.elapsed)
         Task { @MainActor in
             let folder = await recorder.stop()
             detector.isRecording = false
             manualRecording = false
             setStatusIcon(recording: false)
             stopWatchdog()
+            if let ledgerId, folder != nil {
+                Health.ledger.finish(id: ledgerId, reason: reason, detail: detail)
+                let line = "Recording ended after \(length / 60) min \(length % 60) s: \(reason.plain)\(detail.isEmpty ? "" : " (\(detail))")"
+                if reason.isNormal { Log.info("recorder", line) } else { Log.warn("recorder", line) }
+            }
             if let folder {
                 lastFolder = folder
                 finishCall(folder: folder)
@@ -464,7 +540,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         }
     }
 
-    private func recordingEndedUnexpectedly(_ message: String) {
+    /// macOS stopped the capture, or sound stopped arriving. Save what there is and, if the call is still going, start again.
+    private func recordingEndedUnexpectedly(_ message: String, reason: EndReason = .streamError) {
+        cancelWrapUp(nil)
+        let ledgerId = currentLedgerId
+        let call = currentCall
+        let wasManual = manualRecording
+        currentLedgerId = nil
+        if let ledgerId { Health.ledger.finish(id: ledgerId, reason: reason, detail: message) }
         detector.isRecording = false
         manualRecording = false
         setStatusIcon(recording: false)
@@ -475,7 +558,79 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             finishCall(folder: folder)
         }
         stopCopilot()
-        model.state = .error("Recording stopped early (\(message)). What was captured is saved in Movies > MeetingAgent.")
+
+        let callStillThere = wasManual || detector.state != .idle
+        if let call, let ledgerId,
+           ResumePolicy().shouldResume(reason: reason, resumesSoFar: resumeCount, callStillLive: callStillThere, wasStoppedByUser: false) {
+            resumeCount += 1
+            Log.warn("recorder", "Starting a new recording to continue this call (attempt \(resumeCount) of \(ResumePolicy().maxResumes))")
+            model.state = .idle
+            model.raise(AppAlert(id: "resumed", message: "The recording was interrupted (\(reason.plain)), so I started a new one. This call will be saved in more than one part.", isInfo: true))
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+                self?.beginRecording(call, manual: wasManual, resumeOf: ledgerId)
+            }
+            return
+        }
+        Log.error("recorder", "Recording ended early and was not restarted: \(reason.plain). \(message)")
+        model.state = .error("Recording stopped early (\(message)). What was captured is saved in Movies > MeetingAgent. Use Settings > Recorder health to send a report.")
+    }
+
+    // MARK: - When the call looks over
+
+    /// The detector lost the call. That can mean it really ended, or just that the tab lost focus or the mic was
+    /// released for a moment. So wait, keep going while sound is still arriving, and let the person say "keep recording".
+    private func beginWrapUp() {
+        guard wrapUpTimer == nil else { return }
+        wrapUp.reset()
+        let heard = recorder.activity.lastSound.map { "\(Int(Date().timeIntervalSince($0))) s ago" } ?? "none yet"
+        Log.warn("recorder", "The call looks over (the detector lost it). Waiting before stopping. Last sound heard: \(heard)")
+        wrapUpTimer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in self?.wrapUpTick() }
+        wrapUpTick()
+    }
+
+    private func wrapUpTick() {
+        guard recorder.isRecording, !manualRecording else { cancelWrapUp(nil); return }
+        let live = detector.state != .idle
+        switch wrapUp.update(now: Date(), callIsLive: live, lastSound: recorder.activity.lastSound, keepPressed: false) {
+        case .carryOn:
+            model.clearAlert("wrapup")
+            if live { cancelWrapUp("the call came back") }
+        case .warn(let seconds):
+            if wrapUpWarnings == 0 { Log.warn("recorder", "Showing the 'keep recording' warning") }
+            wrapUpWarnings += 1
+            model.raise(AppAlert(id: "wrapup", message: "This call looks like it has ended. Recording stops in \(seconds) s.", button: "Keep recording", section: "§action:keep"))
+        case .stop(let reason):
+            Log.info("recorder", "No sound and no call for \(Int(wrapUp.grace)) s, so the call has ended")
+            model.clearAlert("wrapup")
+            endRecording(reason: reason, detail: "no call and no sound for \(Int(wrapUp.grace)) s")
+        }
+    }
+
+    private func cancelWrapUp(_ why: String?) {
+        let was = wrapUpTimer != nil
+        wrapUpTimer?.invalidate()
+        wrapUpTimer = nil
+        wrapUp.reset()
+        model.clearAlert("wrapup")
+        if was, let why { Log.info("recorder", "Auto-stop cancelled: \(why)") }
+    }
+
+    /// The person pressed "Keep recording". From now on only Stop ends this recording.
+    private func keepRecording() {
+        guard recorder.isRecording else { return }
+        manualRecording = true
+        cancelWrapUp("the person chose to keep recording")
+        Log.info("recorder", "The person chose to keep recording. Auto-stop is off for this recording.")
+        model.raise(AppAlert(id: "kept", message: "Okay. I'll keep recording until you press Stop.", isInfo: true))
+        DispatchQueue.main.asyncAfter(deadline: .now() + 6) { [weak self] in self?.model.clearAlert("kept") }
+    }
+
+    /// Buttons in banners call these through the section field: "§action:keep".
+    private func perform(action: String) {
+        switch action {
+        case "keep": keepRecording()
+        default: Log.warn("app", "Unknown action \(action)")
+        }
     }
 
     private func setStatusIcon(recording: Bool) {
@@ -497,11 +652,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private func stopWatchdog() {
         watchdogTimer?.invalidate()
         watchdogTimer = nil
-        for id in ["no-speech", "screen", "speech-off", "copilot"] { model.clearAlert(id) }
+        for id in ["no-speech", "screen", "speech-off", "copilot", "wrapup", "disk-low"] { model.clearAlert(id) }
     }
 
     private func watchdogTick() {
         guard case .recording = model.state else { return }
+        if let why = recorder.activity.stall() {
+            Log.error("recorder", "The capture has gone quiet: \(why). Received: \(recorder.activity.summary())")
+            Task { @MainActor in
+                _ = await self.recorder.stop()
+                self.recordingEndedUnexpectedly(why, reason: .stalled)
+            }
+            return
+        }
+        if recorder.activity.neverReceivedAudio() {
+            Log.warn("recorder", "No audio has arrived for over a minute. Check Microphone and Screen Recording permissions. \(recorder.activity.summary())")
+        }
+        switch DiskGuard.verdict(freeBytes: Diagnostics.freeBytes(at: Log.root)) {
+        case .critical(let bytes):
+            Log.error("disk", "Only \(Diagnostics.gigabytes(bytes)) free. Stopping the recording so the files are not damaged.")
+            endRecording(reason: .diskFull, detail: "\(Diagnostics.gigabytes(bytes)) free")
+            model.raise(AppAlert(id: "disk", message: "Recording stopped because this Mac is almost out of space (\(Diagnostics.gigabytes(bytes)) left). What was recorded is saved. Free up some space.", isInfo: false))
+            return
+        case .low(let bytes):
+            if !lowDiskShown {
+                lowDiskShown = true
+                Log.warn("disk", "Free space is getting low: \(Diagnostics.gigabytes(bytes))")
+                model.raise(AppAlert(id: "disk-low", message: "This Mac is running low on space (\(Diagnostics.gigabytes(bytes)) left). A long recording could be cut short.", isInfo: false))
+            }
+        case .fine:
+            lowDiskShown = false
+            model.clearAlert("disk-low")
+        }
         if !CGPreflightScreenCaptureAccess() {
             model.raise(AppAlert(id: "screen", message: "Screen Recording was switched off, so this recording may have stopped. Turn it back on, then quit and reopen Meeting Agent.", button: "Fix it", section: LibraryModel.homeKey))
             return
@@ -782,6 +964,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     }
 
     private func openApp(_ section: String? = nil) {
+        if let section, section.hasPrefix("§action:") {
+            perform(action: String(section.dropFirst("§action:".count)))
+            return
+        }
         if let section { library.selection = section }
         library.reload()
         if mainWindow == nil {

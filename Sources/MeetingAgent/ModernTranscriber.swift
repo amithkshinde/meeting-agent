@@ -95,7 +95,7 @@ final class ModernTrackTranscriber: TrackEngine {
             return supported.first { $0.identifier(.bcp47) == wanted }
         }
         var saved = UserDefaults.standard.string(forKey: "speechLocale") ?? "auto"
-        if saved == "hinglish" { saved = "hi-IN" }   // the Hindi engine copes best with Hindi and English mixed
+        if saved == "hinglish" || saved == "hi-IN" || saved == "kn-IN" { saved = "auto" }   // no longer offered
         if saved != "auto" {
             if let match = isSupported(saved) { return match }
             Log.write("speech (\(speaker)): Apple does not offer \(saved) on this Mac, using English instead")
