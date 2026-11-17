@@ -437,6 +437,7 @@ struct CallDetailSheet: View {
                         .help("Useful when part of the call was in another language. The original stays as it is.")
                 }
             }
+            speakersStrip
             if hasVideo {
                 Toggle("Follow the video", isOn: $follow).font(.caption).toggleStyle(.checkbox)
             }
@@ -453,6 +454,30 @@ struct CallDetailSheet: View {
                     onRename: { name in renaming = name; newName = name }
                 )
                 .card(padding: 8)
+            }
+        }
+    }
+
+    /// Everyone on the other side of the call, each with a button to give them a name or correct it.
+    private var speakersStrip: some View {
+        let names = Transcript.speakers(in: lines).filter { $0 != "You" }
+        return Group {
+            if !names.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        Text("Speakers:").font(.caption).foregroundStyle(.secondary)
+                        ForEach(names, id: \.self) { name in
+                            Button {
+                                renaming = name
+                                newName = (name == "Them" || name.hasPrefix("Speaker ")) ? "" : name
+                            } label: {
+                                Label(name, systemImage: "pencil")
+                            }
+                            .buttonStyle(SoftButtonStyle())
+                            .help("Name or rename this speaker. I'll remember their voice for next time.")
+                        }
+                    }
+                }
             }
         }
     }
@@ -700,6 +725,13 @@ struct CallDetailSheet: View {
             let url = folder.appendingPathComponent(file)
             guard let text = try? String(contentsOf: url, encoding: .utf8) else { continue }
             try? Transcript.rename(speaker: old, to: name, in: text).write(to: url, atomically: true, encoding: .utf8)
+        }
+        // If voices were told apart in this call, teach the app whose voice this is.
+        if let review = VoiceReview.load(folder) {
+            let labels = VoiceResolver.labels(for: review.decisions, clusters: review.clusters)
+            if let cluster = labels.first(where: { $0.value == old })?.key {
+                VoiceApply.answer(folder: folder, cluster: cluster, name: name)
+            }
         }
         reloadLines()
         if let text = try? String(contentsOf: Translation.url(folder), encoding: .utf8) { english = Transcript.parse(text) }

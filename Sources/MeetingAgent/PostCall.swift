@@ -351,6 +351,30 @@ final class CallProcessor {
         }
     }
 
+    /// Reads an email out of whatever the AI sent back: "Subject: …" then the body, or JSON with subject and body.
+    static func parseEmail(_ reply: String) -> (subject: String, body: String)? {
+        var text = reply.trimmingCharacters(in: .whitespacesAndNewlines)
+        if text.hasPrefix("```") {
+            text = text.components(separatedBy: "\n").dropFirst().joined(separator: "\n")
+            if let end = text.range(of: "```", options: .backwards) { text = String(text[..<end.lowerBound]) }
+            text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        if text.hasPrefix("{"), let object = jsonObject(from: text),
+           let body = (object["body"] as? String)?.trimmed, !body.isEmpty {
+            let subject = ((object["subject"] as? String) ?? "Following up on our call").trimmed
+            return (subject.isEmpty ? "Following up on our call" : subject, body.replacingOccurrences(of: "\\n", with: "\n"))
+        }
+        var lines = text.components(separatedBy: "\n")
+        var subject = "Following up on our call"
+        if let first = lines.first, first.lowercased().hasPrefix("subject:") {
+            let value = String(first.dropFirst("subject:".count)).trimmed
+            if !value.isEmpty { subject = value }
+            lines.removeFirst()
+        }
+        let body = lines.joined(separator: "\n").trimmed
+        return body.count >= 20 ? (subject, body) : nil
+    }
+
     static func jsonObject(from reply: String) -> [String: Any]? {
         var text = reply.trimmingCharacters(in: .whitespacesAndNewlines)
         if let first = text.firstIndex(of: "{"), let last = text.lastIndex(of: "}"), first < last {
@@ -366,7 +390,7 @@ final class CallProcessor {
     You write a short follow-up email from the user to the people on a call. Write like a real person: plain, warm, direct, short sentences. \
     No stock phrases such as "I hope this email finds you well" or "Please do not hesitate". Recap what was decided, list the action items with who owns each and any dates, \
     and ask about anything still open. Under 170 words. Use only what the notes say. \
-    Reply with JSON only: {"subject": "...", "body": "..."}. The body is plain text with line breaks written as \\n.
+    Reply in plain text in exactly this layout and nothing else: the first line is "Subject: " followed by the subject, then a blank line, then the email body.
     """
 
     func followUp(for call: CallRecord, key: String) async throws -> (subject: String, body: String) {
@@ -384,12 +408,11 @@ final class CallProcessor {
             + "\nNotes:\n\(call.summary)\n"
             + (promises.isEmpty ? "" : "\nPromises:\n\(promises)\n")
             + "\nWrite the email now."
-        let reply = try await ChatService.complete(key: key, system: CallProcessor.followUpSystem, prompt: prompt, json: true, maxTokens: 700)
-        guard let object = CallProcessor.jsonObject(from: reply),
-              let subject = (object["subject"] as? String)?.trimmed,
-              let body = (object["body"] as? String)?.trimmed, !body.isEmpty else {
+        let reply = try await ChatService.complete(key: key, system: CallProcessor.followUpSystem, prompt: prompt, json: false, maxTokens: 700)
+        guard let draft = CallProcessor.parseEmail(reply) else {
+            Log.warn("followup", "The AI's reply could not be read as an email (\(reply.count) characters)")
             throw ChatError.message("I couldn't write that email. Try again.")
         }
-        return (subject, body.replacingOccurrences(of: "\\n", with: "\n"))
+        return draft
     }
 }
