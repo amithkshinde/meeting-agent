@@ -18,6 +18,8 @@ struct HealthCard: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Recorder health").font(.title3.bold())
 
+            UpdateRow()
+
             Text(total == 0
                  ? "No recordings yet."
                  : "Last 30 days: \(total) recording\(total == 1 ? "" : "s"), \(failures) ended unexpectedly.")
@@ -132,6 +134,40 @@ struct ParakeetStatusRow: View {
         case .ready: return .green
         case .failed: return .orange
         default: return .secondary
+        }
+    }
+}
+
+/// "Version 0.2.0 · Check for updates".
+struct UpdateRow: View {
+    @ObservedObject private var checker = UpdateChecker.shared
+
+    private var version: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text("Version \(version)").font(.callout)
+            Text(statusText).font(.callout).foregroundStyle(.secondary)
+            Spacer()
+            if case .available = checker.state {
+                Button("Download update") { checker.download() }.buttonStyle(PrimaryButtonStyle())
+            } else {
+                Button("Check for updates") { Task { await checker.check(manual: true) } }
+                    .buttonStyle(SoftButtonStyle())
+                    .disabled(checker.state == .checking)
+            }
+        }
+    }
+
+    private var statusText: String {
+        switch checker.state {
+        case .idle: return ""
+        case .checking: return "· checking…"
+        case .upToDate: return "· up to date"
+        case .available(let version): return "· \(version) is available"
+        case .failed: return "· couldn't check (are you online?)"
         }
     }
 }

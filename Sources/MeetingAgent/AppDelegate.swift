@@ -112,6 +112,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             ))
         }
         Task { await ParakeetEngine.shared.prepare() }
+        UpdateChecker.shared.onAlert = { [weak self] alert in self?.model.raise(alert) }
+        UpdateChecker.shared.start()
 
         // Show the main window on a normal launch. When macOS starts the app at login, stay quiet.
         if SMAppService.mainApp.status != .enabled { openApp() }
@@ -629,6 +631,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private func perform(action: String) {
         switch action {
         case "keep": keepRecording()
+        case "update": UpdateChecker.shared.download()
         default: Log.warn("app", "Unknown action \(action)")
         }
     }
