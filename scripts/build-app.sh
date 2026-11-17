@@ -22,7 +22,7 @@ echo "Signing with: $IDENTITY"
 # The headers are in the SDK, so point the compiler there when the toolchain's own copy is missing.
 CLANG_BIN="$(xcrun -f clang 2>/dev/null || true)"
 SDK_PATH="$(xcrun --show-sdk-path 2>/dev/null || true)"
-if [ -n "$CLANG_BIN" ] && [ -n "$SDK_PATH" ] && [ ! -d "$(dirname "$CLANG_BIN")/../include/c++/v1" ] && [ -d "$SDK_PATH/usr/include/c++/v1" ]; then
+if [ -n "$SDK_PATH" ] && [ -f "$SDK_PATH/usr/include/c++/v1/cmath" ] && [ ! -f "$(dirname "$CLANG_BIN")/../include/c++/v1/cmath" ]; then
   export CPLUS_INCLUDE_PATH="$SDK_PATH/usr/include/c++/v1${CPLUS_INCLUDE_PATH:+:$CPLUS_INCLUDE_PATH}"
   echo "Using the C++ headers from the SDK."
 fi

@@ -102,10 +102,12 @@ TXT
 SIGN=("$@")
 
 make_dmg arm64 arm64 "Apple Silicon (M1, M2, M3, M4)" "      * This Mac: no key and no sign-up. Uses Apple Intelligence on this Mac."
-make_dmg x86_64 intel "Intel" "      * This Mac: not available on Intel Macs. Use Gemini or Claude instead."
+if [ "${ONLY_ARM64:-0}" != "1" ]; then
+  make_dmg x86_64 intel "Intel" "      * This Mac: not available on Intel Macs. Use Gemini or Claude instead."
+fi
 
 echo
-echo "Both installers are in the dist folder:"
+echo "Your installer is in the dist folder:"
 ls -lh dist/MeetingAgent-${VERSION}-*.dmg
 echo
 echo "Send the arm64 one to people with Apple Silicon Macs, and the intel one to people with Intel Macs."
