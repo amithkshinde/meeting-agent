@@ -647,6 +647,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         case "keep": keepRecording()
         case "end": confirmEnd()
         case "update": Task { @MainActor in UpdateChecker.shared.download() }
+        case let other where other.hasPrefix("voices:"):
+            let id = String(other.dropFirst("voices:".count))
+            if let call = memory.records.first(where: { $0.id == id }) {
+                library.detailCall = call
+                library.selection = LibraryModel.homeKey
+            }
+            openApp()
         default: Log.warn("app", "Unknown action \(action)")
         }
     }

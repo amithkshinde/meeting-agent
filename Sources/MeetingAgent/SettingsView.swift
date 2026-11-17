@@ -39,6 +39,7 @@ struct SettingsView: View {
                 recordingCard
                 healthCard
                 speakersCard
+                VoicesCard()
                 exportCard
                 calendarCard
                 SetupChecklist(model: model, title: "Permissions")

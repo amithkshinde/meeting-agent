@@ -24,7 +24,8 @@ final class CallProcessor {
     You write short, useful notes for the user after a call. "You" is the user and "Them" is everyone else. \
     The transcript is automatic speech recognition, so names and numbers may be wrong. Mark anything unclear instead of guessing. \
     If you are given a list of the people on the call, use their names where the transcript makes clear who said what. \
-    A line may begin with a real person's name instead of "Them", when the video showed who was speaking. Use those names. \
+    A line may begin with a real person's name instead of "Them", when the voice or the video showed who was speaking. Use those names. \
+    Lines that begin with "Speaker 1", "Speaker 2" and so on are different people whose names are not known: keep them apart and never guess their names. \
     Write in English, in Markdown, with exactly these sections and nothing else: \
     ## Summary (three sentences at most), ## Key points, ## Decisions, \
     ## Action items (say who owns each one, and any date mentioned), ## Open questions, ## Raise next time. \
@@ -44,7 +45,7 @@ final class CallProcessor {
     The speech is mostly English, and sometimes another European language. \
     Fix obvious recognition mistakes, the spelling of names and numbers, punctuation and capital letters, using the other lines and the names of the people on the call for context. \
     Keep every line, in the same order, with the same timestamp. Do not summarise, translate, add or remove sentences, and do not guess: if you are unsure, leave the words as they are. \
-    Each line starts with a speaker label: "You", "Them", or a person's name. Keep every label exactly as written. \
+    Each line starts with a speaker label: "You", "Them", "Speaker 1", "Speaker 2" or a person's name. Keep every label exactly as written. \
     If exactly one other person was on the call, you may write their name instead of "Them". \
     Reply with the corrected lines only, nothing before or after.
     """
@@ -111,7 +112,12 @@ final class CallProcessor {
                 }
             }
 
-            CallProcessor.attributeSpeakers(folder: folder)
+            // Voices: tell the people apart by how they sound, and use the names seen on the call screen.
+            var namedByVoice = false
+            if done, Voices.isOn, let tracks = ParakeetEngine.shared.lastTracks {
+                namedByVoice = await self.identifyVoices(folder: folder, tracks: tracks, record: first)
+            }
+            if !namedByVoice { CallProcessor.attributeSpeakers(folder: folder) }
             let raw = (try? String(contentsOf: folder.appendingPathComponent("transcript.txt"), encoding: .utf8)) ?? ""
             guard raw.count > 60 else {
                 Log.write("summary skipped: the transcript is too short")
@@ -185,6 +191,76 @@ final class CallProcessor {
             if latest.client != MemoryStore.unassigned { self.library?.generateBrief(for: latest.client, quiet: true) }
             self.library?.reload()
         }
+    }
+
+    // MARK: - Who is speaking
+
+    /// Splits the other side of the call into voices, names the ones it is sure about, and writes a transcript
+    /// with those names. Voices it is unsure about are kept for the person to name. Returns true when the
+    /// transcript was rewritten.
+    @MainActor
+    private func identifyVoices(folder: URL, tracks: (you: [Utterance], them: [Utterance]), record: CallRecord) async -> Bool {
+        let fm = FileManager.default
+        let system = folder.appendingPathComponent("system.m4a")
+        guard fm.fileExists(atPath: system.path), !tracks.them.isEmpty else { return false }
+        guard Voices.beginAttempt() else { return false }
+        defer { Voices.endAttempt() }
+
+        agent.raise(AppAlert(id: "voices-working", message: "Working out who is speaking…", isInfo: true))
+        defer { agent.clearAlert("voices-working") }
+
+        let started = Date()
+        let raw: [RawVoiceSegment]
+        do {
+            raw = try await VoiceEngine.diarize(file: system)
+        } catch {
+            Log.error("voices", "Could not tell the voices apart: \(error.localizedDescription)")
+            return false
+        }
+        let built = VoiceClustering.build(from: raw)
+        guard !built.clusters.isEmpty else {
+            Log.warn("voices", "No speech found to tell apart in \(folder.lastPathComponent)")
+            return false
+        }
+
+        let me = [CallProcessor.userName]
+        let samples = SpeakerLog.load(folder).map { (t: $0.t, name: $0.name) }
+        let attendees = (record.attendees ?? []).map { $0.name }
+        let votes = ScreenEvidence.votes(segments: built.segments, samples: samples, exclude: me)
+        var decisions = VoiceResolver.resolve(clusters: built.clusters, votes: votes, library: Voices.library, model: Voices.model, attendees: attendees, exclude: me)
+        let turns = VoiceTranscript.turns(you: tracks.you, them: tracks.them, segments: built.segments)
+        for index in decisions.indices { decisions[index].quote = VoiceTranscript.quote(for: decisions[index].id, in: turns) }
+
+        let labels = VoiceResolver.labels(for: decisions, clusters: built.clusters)
+        let text = VoiceTranscript.render(turns, labels: labels)
+        guard text.count > 20 else { return false }
+
+        let transcriptURL = folder.appendingPathComponent("transcript.txt")
+        let rawURL = folder.appendingPathComponent("transcript-raw.txt")
+        if !fm.fileExists(atPath: rawURL.path), let original = try? String(contentsOf: transcriptURL, encoding: .utf8) {
+            try? original.write(to: rawURL, atomically: true, encoding: .utf8)
+        }
+        do { try text.write(to: transcriptURL, atomically: true, encoding: .utf8) } catch { return false }
+        try? fm.removeItem(at: folder.appendingPathComponent("transcript-clean.txt"))
+
+        // Teach the library the voices that were named with confidence.
+        for decision in decisions where decision.learn {
+            guard let name = decision.name, let cluster = built.clusters.first(where: { $0.id == decision.id }) else { continue }
+            Voices.library.learn(name: name, embedding: cluster.embedding, seconds: cluster.seconds, model: Voices.model)
+        }
+
+        let review = VoiceReview(model: Voices.model, clusters: built.clusters, decisions: decisions)
+        review.save(to: folder)
+        VoiceTurns.save(turns, to: folder)
+
+        let summary = decisions.map { "\($0.id)=\($0.name ?? $0.status.rawValue) (\($0.why))" }.joined(separator: "; ")
+        Log.info("voices", "\(folder.lastPathComponent): \(built.clusters.count) voices in \(String(format: "%.0f", Date().timeIntervalSince(started))) s. \(summary)")
+
+        let waiting = review.pending.count
+        if waiting > 0 {
+            agent.raise(AppAlert(id: "voices-\(record.id)", message: waiting == 1 ? "There's a voice in your last call I couldn't name. Who is it?" : "There are \(waiting) voices in your last call I couldn't name. Who are they?", button: "Name them", section: "§action:voices:\(record.id)"))
+        }
+        return true
     }
 
     private func keyRejected() {

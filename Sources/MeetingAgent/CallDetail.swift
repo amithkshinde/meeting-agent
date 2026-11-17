@@ -418,6 +418,7 @@ struct CallDetailSheet: View {
 
     private var transcriptTab: some View {
         VStack(alignment: .leading, spacing: 8) {
+            VoiceReviewCard(folder: folder, attendees: (call.attendees ?? []).map { $0.name }, onChange: { reloadLines() })
             HStack(spacing: 10) {
                 TextField("Search the transcript", text: $search)
                     .textFieldStyle(.roundedBorder)
@@ -597,6 +598,9 @@ struct CallDetailSheet: View {
         hasSpeakerData = FileManager.default.fileExists(atPath: SpeakerLog.url(folder).path)
         if let text = try? String(contentsOf: Translation.url(folder), encoding: .utf8) {
             english = Transcript.parse(text)
+        }
+        if model.detailSeek == nil, let waiting = VoiceReview.load(folder), !waiting.pending.isEmpty {
+            tab = .transcript
         }
         if let seek = model.detailSeek {
             tab = .transcript

@@ -25,6 +25,9 @@ final class ParakeetEngine: ObservableObject {
         didSet { TranscriptionStatus.current = Self.describe(state) }
     }
 
+    /// The sentences from the last call that was transcribed (your mic, and everyone else), so voices can be matched to them.
+    private(set) var lastTracks: (you: [Utterance], them: [Utterance])?
+
     private var manager: AsrManager?
     private var loading: Task<Bool, Never>?
 
@@ -100,6 +103,7 @@ final class ParakeetEngine: ObservableObject {
         let system = folder.appendingPathComponent("system.m4a")
         guard fm.fileExists(atPath: mic.path) || fm.fileExists(atPath: system.path) else { return false }
         guard await prepare() else { return false }
+        lastTracks = nil
 
         let started = Date()
         do {
@@ -120,6 +124,7 @@ final class ParakeetEngine: ObservableObject {
             // Anything made from the old text is out of date.
             try? fm.removeItem(at: folder.appendingPathComponent("transcript-raw.txt"))
             try? fm.removeItem(at: folder.appendingPathComponent("transcript-clean.txt"))
+            lastTracks = (you, them)
             let seconds = Date().timeIntervalSince(started)
             Log.info("parakeet", "Transcribed \(folder.lastPathComponent): \(you.count) lines from you, \(them.count) from them, in \(String(format: "%.0f", seconds)) s")
             return true
