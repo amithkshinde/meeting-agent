@@ -78,7 +78,7 @@ You need Xcode or the Xcode Command Line Tools (`xcode-select --install`) to bui
 **During a call**
 - Detects Meet, Teams, Zoom and other calls, including ones that were never on your calendar, and offers to record.
 - Records screen, call audio and your microphone to your Mac, with no bot joining the call.
-- Live transcript (English, Hindi, Kannada and others), with "You" and "Them" labels.
+- Live captions during the call (Apple's speech engine), then a better final transcript written by Parakeet after the call, with "You" and "Them" labels.
 - Live recap and cards: a question to ask, a point to push back on, or a flag. Each card says where it comes from.
 - Catch me up and Last minute buttons, and a chat you can ask anything.
 - Quiet mode hides suggestions until you peek.
@@ -93,9 +93,9 @@ You need Xcode or the Xcode Command Line Tools (`xcode-select --install`) to bui
 - **Design review:** the Screens tab groups the talk under each screenshot, and the summary gets a "By screen" section ("Screen 1: these 3 comments"). One AI request can summarise the feedback per screen.
 - **Search everything (Command + K):** one box across every call, transcript line, summary, note, file, email, promise and project. A transcript hit opens the video at that moment.
 - **Share menu:** export a call as PDF or Markdown (Notion, Obsidian and most editors open the Markdown), add promises to the Reminders app, or send them to a Notion database.
-- **Hindi and Hinglish:** choose "Hindi and English mixed" as the spoken language, choose whether the cleaned transcript is written in Roman letters or Devanagari, and translate any call into English from its Transcript tab.
+- **Reliability and logs:** a private activity log (keys and emails removed), a ledger of how every recording ended, a "Keep recording" prompt before the app ever stops a call by itself, automatic restart if macOS interrupts the capture, and a Send report button in Settings > Recorder health.
 - **Older calls:** a call recorded before these features can be run through "Analyse the video" on its page, to find the speakers and screens after the fact.
-- Transcript clean-up pass for Hindi, Hinglish and names (the original is kept too).
+- Transcript clean-up pass for names and recognition mistakes (the original is kept too).
 - Summary with decisions, action items and open questions.
 - Promises are pulled out automatically into one list: what you owe, and what others owe you, with due dates.
 - Draft a follow-up email in one click. It opens in your mail app and nothing is sent for you.
@@ -154,7 +154,7 @@ This is an early version. These are the things that do not work well yet.
 
 **AI limits (Gemini)**
 - A free Gemini key allows only about 20 AI requests per 24 hours (seen in practice on `gemini-3.8-flash`). After that, every AI feature stops until the limit resets, roughly 19 hours later: call summaries, cleaned transcripts, promises, project briefs, live suggestions, and chat.
-- Transcription keeps working, because it uses Apple's speech engine on your Mac and does not use the AI key.
+- Transcription keeps working, because it uses Parakeet and Apple's speech engine on your Mac and does not use the AI key.
 - To stay inside the limit, live suggestions on a Gemini key slow down and stop after about 10 requests a day, so the call summary still has room. That makes live suggestions of little use on a free key.
 - There is no "retry" button yet. If a summary fails, it stays without one, and you cannot re-run it later.
 - A Claude key (pay as you go) has no such tight daily limit.
@@ -167,8 +167,8 @@ This is an early version. These are the things that do not work well yet.
 - If you use laptop speakers instead of headphones, the other people's voices leak into your microphone and can be labelled "You". Headphones fix most of this.
 
 **Transcription**
-- It uses Apple's on-device speech engine, and accuracy varies. It mishears names and jargon, drops quiet or overlapping speech, and misreads music and TV in the background.
-- English works best. Hindi and Hinglish are a first version: the "Hinglish" setting runs Apple's Hindi recogniser, which tends to write English words in Devanagari, and the AI clean-up can turn that into Roman letters. This has not been tested on real Hindi calls. Translation to English is done after the call by the AI (so it uses AI requests), and there is no live translation yet. Kannada support varies by Mac.
+- The final transcript is written by Parakeet (NVIDIA Parakeet TDT v3, run on your Mac through FluidAudio and Core ML). The first call downloads the model, about 480 MB, once. Live captions use Apple's engine and are rougher. Both mishear names and jargon, and music or TV in the background can leak in.
+- Parakeet supports English and 24 other European languages. **Hindi, Hinglish and Kannada are not supported** (they were removed in 0.2.0). Intel Macs have not been tested with Parakeet: if it cannot run there, the call keeps its live transcript. Translation to English is done after the call by the AI (so it uses AI requests).
 
 **Video and storage**
 - Video is about 400 MB per hour at the current setting (HEVC, up to 1080p, 10 fps), plus about 45 MB per hour per audio track. Small text can look soft. Screenshots add roughly 100 to 200 KB each (at most 150 per call).
