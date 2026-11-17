@@ -17,6 +17,15 @@ if [ -z "$IDENTITY" ]; then
   fi
 fi
 echo "Signing with: $IDENTITY"
+
+# Some Macs have Command Line Tools that cannot find the C++ headers ("fatal error: 'cmath' file not found").
+# The headers are in the SDK, so point the compiler there when the toolchain's own copy is missing.
+CLANG_BIN="$(xcrun -f clang 2>/dev/null || true)"
+SDK_PATH="$(xcrun --show-sdk-path 2>/dev/null || true)"
+if [ -n "$CLANG_BIN" ] && [ -n "$SDK_PATH" ] && [ ! -d "$(dirname "$CLANG_BIN")/../include/c++/v1" ] && [ -d "$SDK_PATH/usr/include/c++/v1" ]; then
+  export CPLUS_INCLUDE_PATH="$SDK_PATH/usr/include/c++/v1${CPLUS_INCLUDE_PATH:+:$CPLUS_INCLUDE_PATH}"
+  echo "Using the C++ headers from the SDK."
+fi
 APP="build/MeetingAgent.app"
 
 if [ -n "${ARCH:-}" ]; then
