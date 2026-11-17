@@ -6,6 +6,8 @@ struct AppAlert: Identifiable, Equatable {
     var message: String
     var button: String? = nil
     var section: String? = nil     // where the button goes in the main window (nil means Home)
+    var button2: String? = nil     // an optional second choice, shown beside the first
+    var section2: String? = nil
     var isInfo = false
 }
 
@@ -25,9 +27,16 @@ struct AlertBanner: View {
                     .font(.caption)
                     .fixedSize(horizontal: false, vertical: true)
                 if let button = alert.button {
-                    Button(button) { onOpen(alert.section) }
-                        .buttonStyle(.link)
-                        .font(.caption)
+                    HStack(spacing: 14) {
+                        Button(button) { onOpen(alert.section) }
+                            .buttonStyle(.link)
+                            .font(.caption)
+                        if let button2 = alert.button2 {
+                            Button(button2) { onOpen(alert.section2) }
+                                .buttonStyle(.link)
+                                .font(.caption)
+                        }
+                    }
                 }
             }
             Spacer(minLength: 0)

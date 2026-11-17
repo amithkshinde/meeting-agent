@@ -10,25 +10,36 @@ final class ReliabilityTests: XCTestCase {
         XCTAssertEqual(Redactor.clean("/Users/amith/Movies/x"), "/Users/~/Movies/x")
     }
 
-    func testWrapUpWaitsThenStops() {
+    func testWrapUpAsksButNeverStopsOnItsOwn() {
         var wrap = WrapUp()
-        XCTAssertEqual(wrap.update(now: t0, callIsLive: false, lastSound: nil, keepPressed: false), .warn(secondsLeft: 45))
-        XCTAssertEqual(wrap.update(now: t0.addingTimeInterval(30), callIsLive: false, lastSound: nil, keepPressed: false), .warn(secondsLeft: 15))
-        XCTAssertEqual(wrap.update(now: t0.addingTimeInterval(46), callIsLive: false, lastSound: nil, keepPressed: false), .stop(.callEnded))
+        XCTAssertEqual(wrap.update(now: t0, callIsLive: false, lastSound: nil), .carryOn)
+        XCTAssertEqual(wrap.update(now: t0.addingTimeInterval(21), callIsLive: false, lastSound: nil), .ask)
+        // Hours later with no answer it is still only asking.
+        XCTAssertEqual(wrap.update(now: t0.addingTimeInterval(7200), callIsLive: false, lastSound: nil), .ask)
     }
 
     func testWrapUpCancelsWhenCallComesBackOrSoundContinues() {
         var wrap = WrapUp()
-        _ = wrap.update(now: t0, callIsLive: false, lastSound: nil, keepPressed: false)
-        XCTAssertEqual(wrap.update(now: t0.addingTimeInterval(10), callIsLive: true, lastSound: nil, keepPressed: false), .carryOn)
+        _ = wrap.update(now: t0, callIsLive: false, lastSound: nil)
+        XCTAssertEqual(wrap.update(now: t0.addingTimeInterval(10), callIsLive: true, lastSound: nil), .carryOn)
         XCTAssertFalse(wrap.isWrappingUp)
-        XCTAssertEqual(wrap.update(now: t0.addingTimeInterval(50), callIsLive: false, lastSound: t0.addingTimeInterval(45), keepPressed: false), .carryOn)
+        _ = wrap.update(now: t0.addingTimeInterval(20), callIsLive: false, lastSound: nil)
+        XCTAssertEqual(wrap.update(now: t0.addingTimeInterval(50), callIsLive: false, lastSound: t0.addingTimeInterval(45)), .carryOn)
     }
 
-    func testWrapUpNeverWaitsForeverBecauseOfSound() {
+    func testWrapUpAsksEvenWithSoundAfterFiveMinutes() {
         var wrap = WrapUp()
-        _ = wrap.update(now: t0, callIsLive: false, lastSound: t0, keepPressed: false)
-        XCTAssertEqual(wrap.update(now: t0.addingTimeInterval(301), callIsLive: false, lastSound: t0.addingTimeInterval(300), keepPressed: false), .stop(.callEnded))
+        _ = wrap.update(now: t0, callIsLive: false, lastSound: t0)
+        XCTAssertEqual(wrap.update(now: t0.addingTimeInterval(301), callIsLive: false, lastSound: t0.addingTimeInterval(300)), .ask)
+    }
+
+    func testKeepRecordingSnoozesThenAsksAgain() {
+        var wrap = WrapUp()
+        _ = wrap.update(now: t0, callIsLive: false, lastSound: nil)
+        XCTAssertEqual(wrap.update(now: t0.addingTimeInterval(30), callIsLive: false, lastSound: nil), .ask)
+        wrap.keepRecording(now: t0.addingTimeInterval(30))
+        XCTAssertEqual(wrap.update(now: t0.addingTimeInterval(600), callIsLive: false, lastSound: nil), .carryOn)
+        XCTAssertEqual(wrap.update(now: t0.addingTimeInterval(931), callIsLive: false, lastSound: nil), .ask)
     }
 
     func testLedgerCountsFailures() {

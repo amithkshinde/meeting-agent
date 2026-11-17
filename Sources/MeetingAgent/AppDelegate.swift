@@ -47,6 +47,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private var wrapUp = WrapUp()
     private var wrapUpTimer: Timer?
     private var wrapUpWarnings = 0
+    private var lastAskedAt: Date?
     private var currentLedgerId: String?
     private var currentCall: DetectedCall?
     private var resumeCount = 0
@@ -580,12 +581,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     // MARK: - When the call looks over
 
     /// The detector lost the call. That can mean it really ended, or just that the tab lost focus or the mic was
-    /// released for a moment. So wait, keep going while sound is still arriving, and let the person say "keep recording".
+    /// released for a moment. The app never stops by itself: it asks, and the person decides.
     private func beginWrapUp() {
         guard wrapUpTimer == nil else { return }
         wrapUp.reset()
+        wrapUpWarnings = 0
+        lastAskedAt = nil
         let heard = recorder.activity.lastSound.map { "\(Int(Date().timeIntervalSince($0))) s ago" } ?? "none yet"
-        Log.warn("recorder", "The call looks over (the detector lost it). Waiting before stopping. Last sound heard: \(heard)")
+        Log.warn("recorder", "The call looks over (the detector lost it). Will ask before stopping. Last sound heard: \(heard)")
         wrapUpTimer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in self?.wrapUpTick() }
         wrapUpTick()
     }
@@ -593,18 +596,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private func wrapUpTick() {
         guard recorder.isRecording, !manualRecording else { cancelWrapUp(nil); return }
         let live = detector.state != .idle
-        switch wrapUp.update(now: Date(), callIsLive: live, lastSound: recorder.activity.lastSound, keepPressed: false) {
+        switch wrapUp.update(now: Date(), callIsLive: live, lastSound: recorder.activity.lastSound) {
         case .carryOn:
-            model.clearAlert("wrapup")
             if live { cancelWrapUp("the call came back") }
-        case .warn(let seconds):
-            if wrapUpWarnings == 0 { Log.warn("recorder", "Showing the 'keep recording' warning") }
+            else if wrapUp.snoozedUntil != nil { model.clearAlert("wrapup") }
+        case .ask:
+            // Ask now, then remind every two minutes if the question is still unanswered or was dismissed.
+            let due = lastAskedAt.map { Date().timeIntervalSince($0) >= 120 } ?? true
+            guard due else { return }
+            if wrapUpWarnings == 0 { Log.warn("recorder", "Asking the person whether to end the recording") }
             wrapUpWarnings += 1
-            model.raise(AppAlert(id: "wrapup", message: "This call looks like it has ended. Recording stops in \(seconds) s.", button: "Keep recording", section: "§action:keep"))
-        case .stop(let reason):
-            Log.info("recorder", "No sound and no call for \(Int(wrapUp.grace)) s, so the call has ended")
-            model.clearAlert("wrapup")
-            endRecording(reason: reason, detail: "no call and no sound for \(Int(wrapUp.grace)) s")
+            lastAskedAt = Date()
+            model.collapsed = false
+            model.raise(AppAlert(id: "wrapup", message: "This call looks like it has ended. Do you want to end the recording?", button: "End recording", section: "§action:end", button2: "Keep recording", section2: "§action:keep"))
+            Theme.tap()
         }
     }
 
@@ -613,24 +618,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         wrapUpTimer?.invalidate()
         wrapUpTimer = nil
         wrapUp.reset()
+        lastAskedAt = nil
         model.clearAlert("wrapup")
-        if was, let why { Log.info("recorder", "Auto-stop cancelled: \(why)") }
+        if was, let why { Log.info("recorder", "Question about ending the recording closed: \(why)") }
     }
 
-    /// The person pressed "Keep recording". From now on only Stop ends this recording.
+    /// The person pressed "Keep recording". Ask again only if the call is still missing after a while.
     private func keepRecording() {
         guard recorder.isRecording else { return }
-        manualRecording = true
-        cancelWrapUp("the person chose to keep recording")
-        Log.info("recorder", "The person chose to keep recording. Auto-stop is off for this recording.")
-        model.raise(AppAlert(id: "kept", message: "Okay. I'll keep recording until you press Stop.", isInfo: true))
+        wrapUp.keepRecording(now: Date())
+        lastAskedAt = nil
+        model.clearAlert("wrapup")
+        Log.info("recorder", "The person chose to keep recording. Will not ask again for \(Int(wrapUp.snooze / 60)) minutes.")
+        model.raise(AppAlert(id: "kept", message: "Okay, still recording. I'll ask again in \(Int(wrapUp.snooze / 60)) minutes if the call hasn't come back. Press Stop any time.", isInfo: true))
         DispatchQueue.main.asyncAfter(deadline: .now() + 6) { [weak self] in self?.model.clearAlert("kept") }
+    }
+
+    /// The person pressed "End recording".
+    private func confirmEnd() {
+        guard recorder.isRecording else { return }
+        Log.info("recorder", "The person confirmed that the call is over")
+        endRecording(reason: .callEnded, detail: "you confirmed the call was over")
     }
 
     /// Buttons in banners call these through the section field: "§action:keep".
     private func perform(action: String) {
         switch action {
         case "keep": keepRecording()
+        case "end": confirmEnd()
         case "update": UpdateChecker.shared.download()
         default: Log.warn("app", "Unknown action \(action)")
         }

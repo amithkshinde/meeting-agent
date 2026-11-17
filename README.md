@@ -93,7 +93,7 @@ You need Xcode or the Xcode Command Line Tools (`xcode-select --install`) to bui
 - **Design review:** the Screens tab groups the talk under each screenshot, and the summary gets a "By screen" section ("Screen 1: these 3 comments"). One AI request can summarise the feedback per screen.
 - **Search everything (Command + K):** one box across every call, transcript line, summary, note, file, email, promise and project. A transcript hit opens the video at that moment.
 - **Share menu:** export a call as PDF or Markdown (Notion, Obsidian and most editors open the Markdown), add promises to the Reminders app, or send them to a Notion database.
-- **Reliability and logs:** a private activity log (keys and emails removed), a ledger of how every recording ended, a "Keep recording" prompt before the app ever stops a call by itself, automatic restart if macOS interrupts the capture, and a Send report button in Settings > Recorder health.
+- **Reliability and logs:** a private activity log (keys and emails removed), a ledger of how every recording ended, a prompt that asks "End recording or Keep recording?" when the call looks over (the app never ends a recording on its own), automatic restart if macOS interrupts the capture, and a Send report button in Settings > Recorder health.
 - **Older calls:** a call recorded before these features can be run through "Analyse the video" on its page, to find the speakers and screens after the fact.
 - Transcript clean-up pass for names and recognition mistakes (the original is kept too).
 - Summary with decisions, action items and open questions.

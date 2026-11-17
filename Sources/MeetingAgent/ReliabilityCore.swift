@@ -142,41 +142,46 @@ final class RecordingLedger {
     }
 }
 
-// MARK: - "The call looks over": wait, warn, then stop
+// MARK: - "The call looks over": ask, never stop on its own
 
 /// The detector can lose sight of a call when the tab loses focus, the title changes or the mic is
-/// released for a moment. Stopping on the first sign made recordings end in the middle of calls.
-/// This waits, keeps going while sound is still arriving, and lets the person say "keep recording".
+/// released for a moment. The app never ends a recording because of that. It waits, stays quiet while
+/// sound is still arriving, and then asks the person whether to end it. Only they decide.
 struct WrapUp {
     enum Decision: Equatable {
         case carryOn                       // nothing to show
-        case warn(secondsLeft: Int)        // show "Stopping in N s. Keep recording"
-        case stop(EndReason)
+        case ask                           // show "The call looks over. End recording or Keep recording?"
     }
 
-    var grace: TimeInterval = 45           // after the detector says the call is over
+    var grace: TimeInterval = 20           // how long the call must be gone before asking
     var soundIsRecent: TimeInterval = 20   // sound this recently means someone is still talking
-    var longestExtension: TimeInterval = 300 // never wait longer than this because of sound alone
+    var longestExtension: TimeInterval = 300 // never hold the question back longer than this because of sound alone
+    var snooze: TimeInterval = 900         // after "Keep recording", do not ask again for this long
 
     private(set) var idleSince: Date?
+    private(set) var snoozedUntil: Date?
 
     var isWrappingUp: Bool { idleSince != nil }
 
-    mutating func reset() { idleSince = nil }
+    mutating func reset() { idleSince = nil; snoozedUntil = nil }
 
-    mutating func update(now: Date, callIsLive: Bool, lastSound: Date?, keepPressed: Bool) -> Decision {
-        if callIsLive || keepPressed {
+    /// The person said "Keep recording".
+    mutating func keepRecording(now: Date) { snoozedUntil = now.addingTimeInterval(snooze) }
+
+    mutating func update(now: Date, callIsLive: Bool, lastSound: Date?) -> Decision {
+        if callIsLive {
             idleSince = nil
+            snoozedUntil = nil
             return .carryOn
         }
         let since = idleSince ?? now
         idleSince = since
-        let waited = now.timeIntervalSince(since)
+        if let snoozedUntil, now < snoozedUntil { return .carryOn }
 
+        let waited = now.timeIntervalSince(since)
         let soundRecent = lastSound.map { now.timeIntervalSince($0) < soundIsRecent } ?? false
         if soundRecent && waited < longestExtension { return .carryOn }
-        if waited >= grace { return .stop(.callEnded) }
-        return .warn(secondsLeft: max(1, Int((grace - waited).rounded(.up))))
+        return waited >= grace ? .ask : .carryOn
     }
 }
 
