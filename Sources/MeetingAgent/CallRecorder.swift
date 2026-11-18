@@ -134,12 +134,12 @@ final class CallRecorder: NSObject, SCStreamDelegate, SCStreamOutput, SCRecordin
         // This file exists only while a recording is open. If the app is killed, it is how the next launch knows.
         try? "recording".write(to: folder.appendingPathComponent("recording.lock"), atomically: true, encoding: .utf8)
 
-        // Cap the picture at 1080 lines and a low frame rate to keep CPU use down.
+        // Cap the picture at 1080 lines and 5 frames a second to keep CPU use down. Calls barely move, and the name reader looks once a second.
         let scale = min(1.0, 1080.0 / Double(display.height))
         let configuration = SCStreamConfiguration()
         configuration.width = Self.even(Double(display.width) * scale)
         configuration.height = Self.even(Double(display.height) * scale)
-        configuration.minimumFrameInterval = CMTime(value: 1, timescale: 10)
+        configuration.minimumFrameInterval = CMTime(value: 1, timescale: 5)
         configuration.showsCursor = true
         configuration.capturesAudio = true
         configuration.excludesCurrentProcessAudio = true

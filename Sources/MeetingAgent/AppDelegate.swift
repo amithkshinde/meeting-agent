@@ -33,6 +33,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private var currentCallId: String?
     private var copilotTimer: Timer?
     private var watchdogTimer: Timer?
+    private var perfTicks = 0
+    private var lastLocalTick = Date.distantPast
     private var copilotBusy = false
     private var copilotFailures = 0
     private var geminiPauseShown = false
@@ -682,6 +684,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
     private func watchdogTick() {
         guard case .recording = model.state else { return }
+        perfTicks += 1
+        if perfTicks % 3 == 0 { Log.info("perf", Performance.line()) }
         if let why = recorder.activity.stall() {
             Log.error("recorder", "The capture has gone quiet: \(why). Received: \(recorder.activity.summary())")
             Task { @MainActor in
@@ -757,6 +761,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         guard case .recording = model.state, model.copilotOn, !copilotBusy,
               lineCounter != lastCopilotLine,
               let key = AIAccess.key(project: model.client, projects: projects) else { return }
+        // The on-device model uses a lot of this Mac's memory and processor while the call is running,
+        // so on-device suggestions come only every few minutes.
+        if key == AIAccess.localKey {
+            if Date().timeIntervalSince(lastLocalTick) < 180 { return }
+            lastLocalTick = Date()
+        }
         // A free Gemini key allows only a handful of requests a day. Go slowly and leave room for the summary.
         if key != AIAccess.localKey, !key.hasPrefix("sk-ant-") {
             if !GeminiBudget.liveSuggestionsAllowed {
@@ -782,7 +792,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             .filter { $0.time > cutoff }
             .map { "[\(stamp($0.time))] \($0.speaker): \($0.text)" }
             .joined(separator: "\n")
-        if transcript.count > 12_000 { transcript = String(transcript.suffix(12_000)) }
+        let transcriptLimit = key == AIAccess.localKey ? 4_000 : 12_000
+        if transcript.count > transcriptLimit { transcript = String(transcript.suffix(transcriptLimit)) }
         let known = projects.names(memory: memory, knowledge: knowledge)
         let projectHint = (model.client.trimmed.isEmpty && !known.isEmpty)
             ? "The user's projects: \(known.joined(separator: "; ")). This call is not filed under one yet.\n\n"
@@ -791,7 +802,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             query: String(transcript.suffix(2000)),
             client: model.client,
             excluding: currentCallId,
-            maxChars: 9000,
+            maxChars: key == AIAccess.localKey ? 2500 : 9000,
             cloud: key != AIAccess.localKey
         )
         let promises = model.client.trimmed.isEmpty ? "" : commitments.openLines(project: model.client, memory: memory)
