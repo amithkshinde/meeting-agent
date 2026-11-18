@@ -21,6 +21,13 @@ final class PlayerModel: ObservableObject {
             player = nil
         }
         guard let player else { return }
+        if let url {
+            let folder = url.deletingLastPathComponent()
+            Task.detached { [weak self] in
+                guard let item = await CleanPlayback.item(folder: folder) else { return }
+                await MainActor.run { self?.useCleanAudio(item) }
+            }
+        }
         timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.5, preferredTimescale: 600), queue: .main) { [weak self] time in
             let seconds = time.seconds
             self?.current = seconds.isFinite ? seconds : 0
@@ -34,6 +41,17 @@ final class PlayerModel: ObservableObject {
     deinit {
         if let timeObserver { player?.removeTimeObserver(timeObserver) }
         player?.pause()
+    }
+
+    /// Swaps in the echo-free version without losing the place or pausing.
+    private func useCleanAudio(_ item: AVPlayerItem) {
+        guard let player else { return }
+        let time = player.currentTime()
+        let wasPlaying = player.rate != 0
+        player.replaceCurrentItem(with: item)
+        player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero) { _ in
+            if wasPlaying { player.play() }
+        }
     }
 
     func seek(to seconds: Double, play: Bool = true) {

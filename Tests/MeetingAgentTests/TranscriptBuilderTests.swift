@@ -23,4 +23,19 @@ final class TranscriptBuilderTests: XCTestCase {
         XCTAssertEqual(parsed.map { $0.speaker }, ["Them", "You"])
         XCTAssertEqual(parsed.first?.time, 10)
     }
+
+    func testEchoCutIntoDifferentSentencesIsStillRemoved() {
+        let them = [Utterance(start: 0, end: 4, text: "We should ship the release"),
+                    Utterance(start: 4.2, end: 7, text: "on Friday afternoon if testing passes")]
+        let you = [Utterance(start: 0.4, end: 7.4, text: "ship the release on Friday afternoon if testing passes"),
+                   Utterance(start: 9, end: 11, text: "Yes I agree with that")]
+        let kept = TranscriptBuilder.removeEchoes(you: you, them: them)
+        XCTAssertEqual(kept.map { $0.text }, ["Yes I agree with that"])
+    }
+
+    func testShortYouLinesAreKept() {
+        let them = [Utterance(start: 0, end: 4, text: "Is that okay with you")]
+        let you = [Utterance(start: 1, end: 2, text: "Yes okay")]
+        XCTAssertEqual(TranscriptBuilder.removeEchoes(you: you, them: them).count, 1)
+    }
 }

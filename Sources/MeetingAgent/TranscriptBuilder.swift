@@ -67,13 +67,25 @@ enum TranscriptBuilder {
     }
 
     /// Drops "You" lines that are just the call audio leaking into the microphone (no headphones).
-    /// A mic sentence is an echo when a "Them" sentence ends within 3 seconds and says nearly the same words.
+    /// The leak arrives a fraction of a second late and is often cut into different sentences than the
+    /// original, so a mic sentence is an echo when nearly all its words (at least 3) appear in what
+    /// "Them" said in the 10 seconds around it.
     static func removeEchoes(you: [Utterance], them: [Utterance]) -> [Utterance] {
         you.filter { mine in
-            !them.contains { theirs in
-                abs(theirs.end - mine.end) <= 3 && similarity(mine.text, theirs.text) >= 0.7
+            let mineWords = wordList(mine.text)
+            guard mineWords.count >= 3 else { return true }
+            var nearby = Set<String>()
+            for theirs in them where theirs.start - 10 <= mine.end && theirs.end + 10 >= mine.start {
+                nearby.formUnion(wordList(theirs.text))
             }
+            guard !nearby.isEmpty else { return true }
+            let covered = mineWords.filter { nearby.contains($0) }.count
+            return Double(covered) / Double(mineWords.count) < 0.8
         }
+    }
+
+    static func wordList(_ text: String) -> [String] {
+        text.lowercased().split(whereSeparator: { !$0.isLetter && !$0.isNumber }).map(String.init)
     }
 
     static func words(_ text: String) -> Set<String> {
