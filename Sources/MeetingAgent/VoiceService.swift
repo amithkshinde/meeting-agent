@@ -51,8 +51,11 @@ enum Voices {
 /// Works out who spoke when, and gives each stretch of speech a voice fingerprint.
 enum VoiceEngine {
     /// The first call downloads the models (a few hundred MB, once). Runs off the main thread.
-    static func diarize(file: URL) async throws -> [RawVoiceSegment] {
-        let manager = OfflineDiarizerManager()
+    /// `minSpeakers` asks for at least that many voices, used when the call screen showed more people than were found.
+    static func diarize(file: URL, minSpeakers: Int? = nil) async throws -> [RawVoiceSegment] {
+        var config = OfflineDiarizerConfig.default
+        if let minSpeakers { config.clustering.minSpeakers = minSpeakers }
+        let manager = OfflineDiarizerManager(config: config)
         try await manager.prepareModels()
         let result = try await manager.process(file)
         return result.segments.map {

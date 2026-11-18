@@ -116,9 +116,13 @@ final class CallRecorder: NSObject, SCStreamDelegate, SCStreamOutput, SCRecordin
     private let sampleQueue = DispatchQueue(label: "meetingagent.samples")
 
     var isRecording: Bool { stream != nil }
+    /// True while a recording is being set up, before the stream exists.
+    private(set) var isStarting = false
 
     func start(call: DetectedCall) async throws {
-        guard stream == nil else { return }
+        guard stream == nil, !isStarting else { return }
+        isStarting = true
+        defer { isStarting = false }
 
         guard CGPreflightScreenCaptureAccess() || CGRequestScreenCaptureAccess() else {
             throw RecorderError.screenPermission
@@ -147,6 +151,7 @@ final class CallRecorder: NSObject, SCStreamDelegate, SCStreamOutput, SCRecordin
         configuration.sampleRate = 48_000
         configuration.channelCount = 2
         configuration.captureMicrophone = true
+        configuration.pixelFormat = kCVPixelFormatType_32BGRA
 
         streamConfiguration = configuration
         let filter = SCContentFilter(display: display, excludingWindows: [])

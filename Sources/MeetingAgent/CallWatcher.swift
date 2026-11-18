@@ -37,6 +37,8 @@ final class CallWatcher {
     private var nameCache: [String: (name: String, at: Double)] = [:]
     private var lastSpeaker: String?
     private var loggedFirstRing = false
+    private var loggedFormat = false
+    private var loggedFirstFrame = false
 
     private var wantSpeakers: Bool { UserDefaults.standard.object(forKey: "watchSpeakers") as? Bool ?? true }
     private var wantScreens: Bool { UserDefaults.standard.object(forKey: "watchScreens") as? Bool ?? true }
@@ -73,7 +75,17 @@ final class CallWatcher {
         let now = Date()
         guard now.timeIntervalSince(lastSample) >= 1.0, wantSpeakers || wantScreens else { return }
         guard let pixels = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
-        guard CVPixelBufferGetPixelFormatType(pixels) == kCVPixelFormatType_32BGRA else { return }
+        guard CVPixelBufferGetPixelFormatType(pixels) == kCVPixelFormatType_32BGRA else {
+            if !loggedFormat {
+                loggedFormat = true
+                Log.warn("watcher", "Live screen frames arrive in an unsupported format (\(CVPixelBufferGetPixelFormatType(pixels))). Names are read from the video after the call instead.")
+            }
+            return
+        }
+        if !loggedFirstFrame {
+            loggedFirstFrame = true
+            Log.info("watcher", "Live screen reading started on the first frame")
+        }
 
         CVPixelBufferLockBaseAddress(pixels, .readOnly)
         defer { CVPixelBufferUnlockBaseAddress(pixels, .readOnly) }

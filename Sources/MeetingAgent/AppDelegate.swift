@@ -439,7 +439,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     }
 
     private func beginRecording(_ call: DetectedCall, manual: Bool, resumeOf: String? = nil) {
-        guard !recorder.isRecording else { return }
+        guard !recorder.isRecording, !recorder.isStarting else { return }
         if resumeOf == nil { resumeCount = 0 }
         let free = Diagnostics.freeBytes(at: Log.root)
         if case .critical(let bytes) = DiskGuard.verdict(freeBytes: free) {

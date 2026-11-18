@@ -132,6 +132,9 @@ final class CallProcessor {
                 }
             }
 
+            // Read the names off the call video, so the voices can be matched to the people shown speaking.
+            await self.readNamesFromVideo(folder: folder)
+
             // Voices: tell the people apart by how they sound, and use the names seen on the call screen.
             var namedByVoice = false
             if transcribed, Voices.isOn, let tracks = ParakeetEngine.shared.lastTracks {
@@ -218,6 +221,34 @@ final class CallProcessor {
 
     // MARK: - Who is speaking
 
+    /// Looks through the saved call video for the highlighted speaker's name, unless that was already done.
+    @MainActor
+    private func readNamesFromVideo(folder: URL) async {
+        let video = folder.appendingPathComponent("screen.mp4")
+        guard UserDefaults.standard.object(forKey: "watchSpeakers") as? Bool ?? true,
+              FileManager.default.fileExists(atPath: video.path),
+              SpeakerLog.load(folder).isEmpty else { return }
+        agent.raise(AppAlert(id: "reading-video", message: "Reading the names from the call video…", isInfo: true))
+        defer { agent.clearAlert("reading-video") }
+        let started = Date()
+        let result = await CallWatcher().analyseVideo(at: video, folder: folder) { _ in }
+        Log.info("watcher", "\(folder.lastPathComponent): read the video in \(String(format: "%.0f", Date().timeIntervalSince(started))) s, \(result.speakerSamples) speaker readings, \(result.screens) screens")
+    }
+
+    /// How many different people (other than the user) the call screen showed speaking for a few seconds.
+    private static func screenPeople(_ samples: [(t: Double, name: String)], exclude: [String]) -> Int {
+        var seconds: [String: Int] = [:]
+        for sample in samples where !exclude.contains(where: { VoiceNames.same($0, sample.name) }) { seconds[sample.name, default: 0] += 1 }
+        let names = seconds.filter { $0.value >= 4 }.map { $0.key }
+        // "Ananya Kan…" and "Ananya Kannan" are one person.
+        let distinct = names.filter { short in
+            guard short.hasSuffix("…") else { return true }
+            let stem = String(short.dropLast())
+            return !names.contains { $0 != short && $0.hasPrefix(stem) }
+        }
+        return distinct.count
+    }
+
     /// Splits the other side of the call into voices, names the ones it is sure about, and writes a transcript
     /// with those names. Voices it is unsure about are kept for the person to name. Returns true when the
     /// transcript was rewritten.
@@ -247,7 +278,7 @@ final class CallProcessor {
             Log.error("voices", "Could not tell the voices apart: \(error.localizedDescription)")
             return false
         }
-        let built = VoiceClustering.build(from: raw)
+        var built = VoiceClustering.build(from: raw)
         guard !built.clusters.isEmpty else {
             Log.warn("voices", "No speech found to tell apart in \(folder.lastPathComponent)")
             return false
@@ -263,6 +294,16 @@ final class CallProcessor {
 
         let me = [CallProcessor.userName]
         let samples = SpeakerLog.load(folder).map { (t: $0.t, name: $0.name) }
+        // The call screen showed more people speaking than there are voices: ask the voice step to look for more.
+        let expected = Self.screenPeople(samples, exclude: me) + (useMic ? 1 : 0)
+        if expected > built.clusters.count, expected <= 8,
+           let more = try? await VoiceEngine.diarize(file: source, minSpeakers: expected) {
+            let again = VoiceClustering.build(from: more, mergeAbove: 0.9)
+            if again.clusters.count > built.clusters.count {
+                Log.info("voices", "\(folder.lastPathComponent): the screen showed \(expected) people but \(built.clusters.count) voices were found, so it looked again and found \(again.clusters.count)")
+                built = again
+            }
+        }
         let attendees = (record.attendees ?? []).map { $0.name }
         let votes = ScreenEvidence.votes(segments: built.segments, samples: samples, exclude: me)
         var decisions = VoiceResolver.resolve(clusters: built.clusters, votes: votes, library: Voices.library, model: Voices.model, attendees: attendees, exclude: me)
