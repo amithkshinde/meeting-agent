@@ -1,0 +1,16 @@
+# Checks every change: builds the app and runs the automatic tests on a Mac in GitHub's cloud.
+name: Check
+on:
+  pull_request:
+  push:
+    branches: [main, 'feature/**']
+
+jobs:
+  test:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: swift build
+      - name: Test
+        run: swift test

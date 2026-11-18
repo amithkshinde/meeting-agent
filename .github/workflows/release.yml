@@ -1,0 +1,72 @@
+# Builds both Mac installers (Apple Silicon and Intel) and publishes them as a GitHub Release.
+#
+# To publish an update, see docs/UPDATING.md. In short: raise the version in Resources/Info.plist,
+# write the first line of RELEASE_NOTES.md, merge to main, then push a tag like v0.3.0.
+#
+# Optional: to keep macOS permissions (Screen Recording) across updates, add two repository secrets
+#   MAC_CERT_P12       the "Meeting Agent Dev" certificate exported as .p12, then base64-encoded
+#   MAC_CERT_PASSWORD  the password you chose when exporting it
+# Without them the installers are signed ad hoc, and macOS asks people for Screen Recording again after each update.
+name: Release Mac app
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build and publish, for example v0.3.0 (it must already exist)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  mac:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - name: Check the version matches the tag
+        id: ver
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Resources/Info.plist)"
+          if [ "v$VERSION" != "$TAG" ]; then
+            echo "::error::The tag is $TAG but Resources/Info.plist says $VERSION. Raise the version, commit, and tag again."
+            exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Use the signing certificate, if one is saved
+        env:
+          P12: ${{ secrets.MAC_CERT_P12 }}
+          PASS: ${{ secrets.MAC_CERT_PASSWORD }}
+        run: |
+          if [ -z "$P12" ]; then echo "No certificate saved: signing ad hoc."; exit 0; fi
+          echo "$P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p ci "$RUNNER_TEMP/ci.keychain"
+          security default-keychain -s "$RUNNER_TEMP/ci.keychain"
+          security unlock-keychain -p ci "$RUNNER_TEMP/ci.keychain"
+          security import "$RUNNER_TEMP/cert.p12" -k "$RUNNER_TEMP/ci.keychain" -P "$PASS" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k ci "$RUNNER_TEMP/ci.keychain"
+          security find-identity -p codesigning
+
+      - name: Build both installers
+        run: scripts/make-installer.sh
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.ver.outputs.tag }}"
+          NOTES="RELEASE_NOTES.md"
+          [ -f "$NOTES" ] || echo "Meeting Agent ${{ steps.ver.outputs.version }}" > "$NOTES"
+          printf '\n\nThe first time, macOS may say it cannot verify the app: right-click it, choose Open, then Open again.\n' >> "$NOTES"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/*.dmg --clobber
+          else
+            gh release create "$TAG" dist/*.dmg --title "Meeting Agent ${{ steps.ver.outputs.version }}" --notes-file "$NOTES"
+          fi

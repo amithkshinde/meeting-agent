@@ -352,7 +352,7 @@ footer a{text-decoration:none}footer a:hover{color:var(--ink)}
     <div class="links2">
       <a class="btn" href="https://amith-shinde.framer.ai/" target="_blank" rel="noopener">View my portfolio</a>
       <a class="btn ghost" href="https://www.linkedin.com/in/amithkshinde" target="_blank" rel="noopener">LinkedIn</a>
-      <a class="btn ghost" href="https://github.com/amithkshinde/meeting-agent-mac" target="_blank" rel="noopener">Mac on GitHub</a>
+      <a class="btn ghost" href="https://github.com/amithkshinde/meeting-agent" target="_blank" rel="noopener">Mac on GitHub</a>
       <a class="btn ghost" href="https://github.com/amithkshinde/meeting-agent-windows" target="_blank" rel="noopener">Windows on GitHub</a>
     </div>
   </div>
@@ -375,11 +375,11 @@ footer a{text-decoration:none}footer a:hover{color:var(--ink)}
 
 <footer><div class="wrap">
   <span>Meeting Agent &middot; MIT License &middot; &copy; Amith K Shinde</span>
-  <span><a href="https://github.com/amithkshinde/meeting-agent-mac" target="_blank" rel="noopener">Mac</a> &middot; <a href="https://github.com/amithkshinde/meeting-agent-windows" target="_blank" rel="noopener">Windows</a> &middot; <a href="https://amith-shinde.framer.ai/" target="_blank" rel="noopener">Portfolio</a> &middot; <a href="https://www.linkedin.com/in/amithkshinde" target="_blank" rel="noopener">LinkedIn</a></span>
+  <span><a href="https://github.com/amithkshinde/meeting-agent" target="_blank" rel="noopener">Mac</a> &middot; <a href="https://github.com/amithkshinde/meeting-agent-windows" target="_blank" rel="noopener">Windows</a> &middot; <a href="https://amith-shinde.framer.ai/" target="_blank" rel="noopener">Portfolio</a> &middot; <a href="https://www.linkedin.com/in/amithkshinde" target="_blank" rel="noopener">LinkedIn</a></span>
 </div></footer>
 
 <script>
-var MAC_REPO = "https://github.com/amithkshinde/meeting-agent-mac";
+var MAC_REPO = "https://github.com/amithkshinde/meeting-agent-mac"; // old 0.1.0 files, used only until the first release below is found
 var WIN_REPO = "https://github.com/amithkshinde/meeting-agent-windows";
 var DOWNLOADS = {
   arm:   MAC_REPO + "/releases/download/mac-v0.1.0/MeetingAgent-0.1.0-arm64.dmg",
@@ -462,7 +462,7 @@ function load(repoPath, jobs) {
 
 (function () {
   render();
-  load("amithkshinde/meeting-agent-mac", [["arm", /arm64.*\.dmg$/i], ["intel", /intel.*\.dmg$/i]]);
+  load("amithkshinde/meeting-agent", [["arm", /arm64.*\.dmg$/i], ["intel", /intel.*\.dmg$/i]]);
   load("amithkshinde/meeting-agent-windows", [["win", /\.exe$/i]]);
   var tog = document.getElementById("chip-toggle");
   var box = document.getElementById("chipbox");
