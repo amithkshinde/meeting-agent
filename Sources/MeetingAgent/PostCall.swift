@@ -21,16 +21,34 @@ final class CallProcessor {
     // MARK: - Prompts
 
     static let summarySystem = """
-    You write short, useful notes for the user after a call. "You" is the user and "Them" is everyone else. \
+    You write the minutes of meeting (MOM) for the user after a call. "You" is the user and "Them" is everyone else. \
     The transcript is automatic speech recognition, so names and numbers may be wrong. Mark anything unclear instead of guessing. \
     If you are given a list of the people on the call, use their names where the transcript makes clear who said what. \
     A line may begin with a real person's name instead of "Them", when the voice or the video showed who was speaking. Use those names. \
     Lines that begin with "Speaker 1", "Speaker 2" and so on are different people whose names are not known: keep them apart and never guess their names. \
     Write in English, in Markdown, with exactly these sections and nothing else: \
-    ## Summary (three sentences at most), ## Key points, ## Decisions, \
-    ## Action items (say who owns each one, and any date mentioned), ## Open questions, ## Raise next time. \
-    Write "None." for an empty section. Only use what the transcript says.
+    ## Summary (three sentences at most, saying what the meeting was for and how it ended), \
+    ## Discussion (short bullets grouped by topic, each saying who raised or decided what), \
+    ## Decisions, \
+    ## Action items (one bullet each, as "Owner: task, due date if one was mentioned"), \
+    ## Open questions, ## Raise next time. \
+    Write "None." for an empty section. Only use what the transcript says. Do not write the date or the attendee list, they are added for you.
     """
+
+    /// The distinct speakers named in a transcript, for the MOM header.
+    static func attendees(in transcript: String, you: String) -> [String] {
+        var seen: [String] = []
+        for line in transcript.components(separatedBy: "\n") {
+            guard line.hasPrefix("["), let close = line.firstIndex(of: "]") else { continue }
+            let rest = line[line.index(after: close)...].trimmingCharacters(in: .whitespaces)
+            guard let colon = rest.firstIndex(of: ":") else { continue }
+            let label = String(rest[..<colon]).trimmingCharacters(in: .whitespaces)
+            guard !label.isEmpty, label.count < 40, label != "You", label != "Them", !seen.contains(label) else { continue }
+            seen.append(label)
+        }
+        let me = you.trimmingCharacters(in: .whitespaces)
+        return [me.isEmpty ? "You" : "\(me) (You)"] + seen.filter { !VoiceNames.same($0, me) }
+    }
 
     /// Added to the summary prompt when the call shared several screens (a design review).
     static let byScreenNote = """
@@ -164,7 +182,8 @@ final class CallProcessor {
                 let formatter = DateFormatter()
                 formatter.dateStyle = .medium
                 formatter.timeStyle = .short
-                let header = "# Call summary\n\n- Project: \(client)\n- App: \(current.app)\n- Date: \(formatter.string(from: current.date))\n\n"
+                let who = CallProcessor.attendees(in: transcript, you: saved.isEmpty ? NSFullUserName() : saved).joined(separator: ", ")
+                let header = "# Minutes of meeting\n\n- Project: \(client)\n- App: \(current.app)\n- Date: \(formatter.string(from: current.date))\n- Attendees: \(who)\n\n"
                 let url = folder.appendingPathComponent("summary.md")
                 try (header + summary).write(to: url, atomically: true, encoding: .utf8)
                 var updated = self.memory.records.first(where: { $0.id == id }) ?? current
