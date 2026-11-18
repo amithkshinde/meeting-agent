@@ -28,9 +28,9 @@ then merge. Merging to `main` updates the website by itself. A release only happ
 2. **Write the release notes** in `RELEASE_NOTES.md`. The **first line** is what people see in the banner, so make it
    one plain sentence.
 3. Commit these on a branch, open a pull request, and merge it once Check is green.
-4. **Tag it.** On your Mac, in Terminal, from the project folder:
-   `git checkout main && git pull && git tag v0.4.0 && git push origin v0.4.0`
-   (a `v` plus the exact number from step 1). GitHub now builds `MeetingAgent-0.4.0-arm64.dmg` and
+4. **Start the build.** Easiest: on GitHub open **Actions > Release Mac app > Run workflow**, keep branch `main`, type
+   `v0.4.0` (a `v` plus the exact number from step 1) and press the green button. (Terminal alternative:
+   `git checkout main && git pull && git tag v0.4.0 && git push origin v0.4.0`.) GitHub now builds `MeetingAgent-0.4.0-arm64.dmg` and
    `MeetingAgent-0.4.0-intel.dmg` and publishes the release. Watch it on the **Actions** tab (about 15 to 25 minutes).
    If the tag and the plist number differ, the build stops and says so. Fix the number and tag again.
 5. **Check it.** Open Meeting Agent, Settings, Recorder health, **Check for updates**.
@@ -38,8 +38,8 @@ then merge. Merging to `main` updates the website by itself. A release only happ
 ## Publishing a Windows update
 
 1. In the Windows repo raise `version` in `package.json`, write what changed, merge through a pull request.
-2. Tag it: `git tag v0.4.0 && git push origin v0.4.0`. GitHub builds the installer on a Windows machine and publishes it.
-   (You can also use **Actions > Build Windows installer > Run workflow**.)
+2. On GitHub open **Actions > Build Windows installer > Run workflow** (or push a tag like `v0.4.0`). GitHub builds the
+   installer on a Windows machine and publishes it.
 3. Keep the Windows and Mac version numbers in step when you can; they do not have to match.
 
 ## Keeping macOS permissions across Mac updates

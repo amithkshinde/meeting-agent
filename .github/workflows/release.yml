@@ -1,7 +1,8 @@
 # Builds both Mac installers (Apple Silicon and Intel) and publishes them as a GitHub Release.
 #
 # To publish an update, see docs/UPDATING.md. In short: raise the version in Resources/Info.plist,
-# write the first line of RELEASE_NOTES.md, merge to main, then push a tag like v0.3.0.
+# write the first line of RELEASE_NOTES.md, merge to main, then either push a tag like v0.3.0 or open the
+# Actions tab, choose "Release Mac app", press Run workflow and type v0.3.0.
 #
 # Optional: to keep macOS permissions (Screen Recording) across updates, add two repository secrets
 #   MAC_CERT_P12       the "Meeting Agent Dev" certificate exported as .p12, then base64-encoded
@@ -14,7 +15,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag to build and publish, for example v0.3.0 (it must already exist)'
+        description: 'Version to publish, for example v0.3.0. It must match Resources/Info.plist. The tag is created for you.'
         required: true
 
 permissions:
@@ -25,8 +26,6 @@ jobs:
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.inputs.tag || github.ref }}
 
       - name: Check the version matches the tag
         id: ver
@@ -68,5 +67,5 @@ jobs:
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" dist/*.dmg --clobber
           else
-            gh release create "$TAG" dist/*.dmg --title "Meeting Agent ${{ steps.ver.outputs.version }}" --notes-file "$NOTES"
+            gh release create "$TAG" dist/*.dmg --target "${{ github.sha }}" --title "Meeting Agent ${{ steps.ver.outputs.version }}" --notes-file "$NOTES"
           fi
