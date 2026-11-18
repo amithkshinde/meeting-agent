@@ -26,12 +26,12 @@ final class CallProcessor {
     If you are given a list of the people on the call, use their names where the transcript makes clear who said what. \
     A line may begin with a real person's name instead of "Them", when the voice or the video showed who was speaking. Use those names. \
     Lines that begin with "Speaker 1", "Speaker 2" and so on are different people whose names are not known: keep them apart and never guess their names. \
-    Write in English, in Markdown, with exactly these sections and nothing else: \
-    ## Summary (three sentences at most, saying what the meeting was for and how it ended), \
-    ## Discussion (short bullets grouped by topic, each saying who raised or decided what), \
-    ## Decisions, \
-    ## Action items (one bullet each, as "Owner: task, due date if one was mentioned"), \
-    ## Open questions, ## Raise next time. \
+    Write in English, in Markdown, with exactly these six headings and nothing else, each written exactly as shown: \
+    ## Summary, ## Discussion, ## Decisions, ## Action items, ## Open questions, ## Raise next time. \
+    Summary is three sentences at most, saying what the meeting was for and how it ended. \
+    Discussion is short bullets grouped by topic, each saying who raised or decided what. \
+    Action items are one bullet each, written as the person's actual name, a colon, the task, and the due date if one was mentioned. Never write the word "Owner". If nobody was named for a task, write "Not assigned:". \
+    Do not copy these instructions into the headings. \
     Write "None." for an empty section. Only use what the transcript says. Do not write the date or the attendee list, they are added for you.
     """
 

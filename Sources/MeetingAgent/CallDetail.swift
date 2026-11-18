@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import AVKit
 import SwiftUI
 import UniformTypeIdentifiers
@@ -175,6 +176,8 @@ struct TranscriptList: View {
 struct CallDetailSheet: View {
     @ObservedObject var model: LibraryModel
     let call: CallRecord
+    @State private var transcriptStamp = Date.distantPast
+    @State private var speakerRefresh = 0
     @StateObject private var holder: PlayerHolder
     @Environment(\.dismiss) private var dismiss
 
@@ -244,6 +247,8 @@ struct CallDetailSheet: View {
                  : "This changes every line from this speaker in this call.")
         }
         .onAppear(perform: load)
+        // The transcript is rewritten with names a little after the call ends. Pick that up if this page is already open.
+        .onReceive(Timer.publish(every: 3, on: .main, in: .common).autoconnect()) { _ in refreshIfTranscriptChanged() }
     }
 
     // MARK: Header
@@ -428,7 +433,7 @@ struct CallDetailSheet: View {
 
     private var transcriptTab: some View {
         VStack(alignment: .leading, spacing: 8) {
-            VoiceReviewCard(folder: folder, attendees: (call.attendees ?? []).map { $0.name }, onChange: { reloadLines() })
+            VoiceReviewCard(folder: folder, attendees: (call.attendees ?? []).map { $0.name }, onChange: { reloadLines() }).id(speakerRefresh)
             HStack(spacing: 10) {
                 TextField("Search the transcript", text: $search)
                     .textFieldStyle(.roundedBorder)
@@ -651,6 +656,20 @@ struct CallDetailSheet: View {
 
     private func reloadLines() {
         lines = CallExport.readTranscript(folder)
+        transcriptStamp = Self.newestTranscriptDate(folder)
+    }
+
+    private func refreshIfTranscriptChanged() {
+        let newest = Self.newestTranscriptDate(folder)
+        guard newest > transcriptStamp else { return }
+        reloadLines()
+        speakerRefresh += 1
+    }
+
+    private static func newestTranscriptDate(_ folder: URL) -> Date {
+        ["transcript.txt", "transcript-clean.txt"].compactMap {
+            (try? FileManager.default.attributesOfItem(atPath: folder.appendingPathComponent($0).path))?[.modificationDate] as? Date
+        }.max() ?? .distantPast
     }
 
     // MARK: Actions
