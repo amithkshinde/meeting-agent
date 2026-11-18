@@ -90,4 +90,18 @@ final class ReliabilityTests: XCTestCase {
         SessionMarker.end(at: url)
         XCTAssertNil(SessionMarker.begin(at: url, version: "1.2"))
     }
+
+    func testBlankCallAudioWhileMicTalksIsNoticed() {
+        let tracker = ActivityTracker()
+        let start = Date()
+        tracker.reset(now: start)
+        tracker.note(.system, rms: 0.05, at: start)
+        for i in 0..<400 {
+            tracker.note(.system, rms: 0, at: start.addingTimeInterval(Double(i) * 0.3))
+            tracker.note(.mic, rms: 0.1, at: start.addingTimeInterval(Double(i) * 0.3))
+        }
+        XCTAssertTrue(tracker.systemSilentWhileMicTalks(now: start.addingTimeInterval(120)))
+        tracker.note(.system, rms: 0.05, at: start.addingTimeInterval(121))
+        XCTAssertFalse(tracker.systemSilentWhileMicTalks(now: start.addingTimeInterval(125)))
+    }
 }

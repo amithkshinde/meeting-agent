@@ -195,6 +195,9 @@ final class ActivityTracker {
     private var lastBuffer: [Source: Date] = [:]
     private var counts: [Source: Int] = [:]
     private var lastLoud: Date?
+    private var lastSystemSound: Date?
+    private var micBuffers = 0
+    private var micLoudBuffers = 0
     private(set) var startedAt = Date()
 
     /// RMS above this counts as sound. About -50 dB, so room noise alone does not keep a recording alive.
@@ -203,6 +206,7 @@ final class ActivityTracker {
     func reset(now: Date = Date()) {
         lock.lock(); defer { lock.unlock() }
         lastBuffer = [:]; counts = [:]; lastLoud = nil; startedAt = now
+        lastSystemSound = nil; micBuffers = 0; micLoudBuffers = 0
     }
 
     func note(_ source: Source, rms: Float? = nil, at now: Date = Date()) {
@@ -210,6 +214,31 @@ final class ActivityTracker {
         lastBuffer[source] = now
         counts[source, default: 0] += 1
         if let rms, rms > Self.loudThreshold { lastLoud = now }
+        if let rms {
+            if source == .system, rms > Self.systemSoundThreshold {
+                lastSystemSound = now
+                micBuffers = 0; micLoudBuffers = 0
+            } else if source == .mic {
+                micBuffers += 1
+                if rms > Self.micSpeechThreshold { micLoudBuffers += 1 }
+            }
+        }
+    }
+
+    /// Anything above digital silence. A working call-audio track is never exactly zero while someone talks.
+    static let systemSoundThreshold: Float = 0.0003
+    /// Loud enough to be someone talking near the microphone.
+    static let micSpeechThreshold: Float = 0.02
+
+    /// True when the call audio has been blank for a long time while the microphone kept hearing talking.
+    /// That means the other people can no longer be recorded (for example the sound output changed), so
+    /// only the microphone is picking them up.
+    func systemSilentWhileMicTalks(now: Date = Date(), after seconds: TimeInterval = 90) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        let since = lastSystemSound ?? startedAt
+        guard now.timeIntervalSince(startedAt) > seconds, now.timeIntervalSince(since) > seconds else { return false }
+        guard lastBuffer[.system] != nil, micBuffers > 200 else { return false }
+        return Double(micLoudBuffers) / Double(micBuffers) > 0.3
     }
 
     var lastSound: Date? { lock.lock(); defer { lock.unlock() }; return lastLoud }

@@ -111,6 +111,7 @@ final class CallRecorder: NSObject, SCStreamDelegate, SCStreamOutput, SCRecordin
     private var meta: Meta?
     private(set) var folder: URL?
     private var stopping = false
+    private var streamConfiguration: SCStreamConfiguration?
 
     private let sampleQueue = DispatchQueue(label: "meetingagent.samples")
 
@@ -147,6 +148,7 @@ final class CallRecorder: NSObject, SCStreamDelegate, SCStreamOutput, SCRecordin
         configuration.channelCount = 2
         configuration.captureMicrophone = true
 
+        streamConfiguration = configuration
         let filter = SCContentFilter(display: display, excludingWindows: [])
         let stream = SCStream(filter: filter, configuration: configuration, delegate: self)
 
@@ -183,6 +185,23 @@ final class CallRecorder: NSObject, SCStreamDelegate, SCStreamOutput, SCRecordin
         watcher.begin(folder: folder, start: clockStart)
         self.stream = stream
         Log.info("recorder", "Capture started (\(configuration.width)x\(configuration.height), HEVC, \(call.app)) in \(folder.lastPathComponent)")
+    }
+
+    /// Asks macOS to start listening to the call audio again, without stopping the recording.
+    /// Used when the call-audio track has gone blank while the microphone still hears talking.
+    func reconnectSystemAudio() async {
+        guard let stream, let configuration = streamConfiguration, !stopping else { return }
+        do {
+            configuration.capturesAudio = false
+            try await stream.updateConfiguration(configuration)
+            try await Task.sleep(nanoseconds: 700_000_000)
+            configuration.capturesAudio = true
+            try await stream.updateConfiguration(configuration)
+            Log.info("recorder", "Asked macOS to listen to the call audio again")
+        } catch {
+            configuration.capturesAudio = true
+            Log.warn("recorder", "Could not reconnect the call audio: \(error.localizedDescription)")
+        }
     }
 
     /// Stops capture, closes the files and returns the folder they were saved in.

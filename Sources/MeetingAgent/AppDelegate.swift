@@ -34,6 +34,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private var copilotTimer: Timer?
     private var watchdogTimer: Timer?
     private var perfTicks = 0
+    private var systemFixTries = 0
+    private var lastSystemFix = Date.distantPast
     private var lastLocalTick = Date.distantPast
     private var copilotBusy = false
     private var copilotFailures = 0
@@ -670,6 +672,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     // MARK: - Watching for trouble
 
     private func startWatchdog() {
+        systemFixTries = 0
+        lastSystemFix = Date.distantPast
         watchdogTimer?.invalidate()
         watchdogTimer = Timer.scheduledTimer(withTimeInterval: 20, repeats: true) { [weak self] _ in
             self?.watchdogTick()
@@ -679,7 +683,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private func stopWatchdog() {
         watchdogTimer?.invalidate()
         watchdogTimer = nil
-        for id in ["no-speech", "screen", "speech-off", "copilot", "wrapup", "disk-low"] { model.clearAlert(id) }
+        for id in ["no-speech", "screen", "speech-off", "copilot", "wrapup", "disk-low", "system-silent"] { model.clearAlert(id) }
     }
 
     private func watchdogTick() {
@@ -696,6 +700,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         }
         if recorder.activity.neverReceivedAudio() {
             Log.warn("recorder", "No audio has arrived for over a minute. Check Microphone and Screen Recording permissions. \(recorder.activity.summary())")
+        }
+        if recorder.activity.systemSilentWhileMicTalks() {
+            if systemFixTries < 3, Date().timeIntervalSince(lastSystemFix) > 60 {
+                systemFixTries += 1
+                lastSystemFix = Date()
+                Log.warn("recorder", "The call audio has been blank for over a minute while your microphone hears talking (try \(systemFixTries)). \(recorder.activity.summary())")
+                Task { await self.recorder.reconnectSystemAudio() }
+            }
+            model.raise(AppAlert(id: "system-silent", message: "I can't record the other people's sound right now, only what your microphone hears. Check that the call audio is playing through the Mac's sound output. If you switched speakers or headphones, switch back. I'm trying to reconnect.", isInfo: false))
+        } else {
+            model.clearAlert("system-silent")
         }
         switch DiskGuard.verdict(freeBytes: Diagnostics.freeBytes(at: Log.root)) {
         case .critical(let bytes):

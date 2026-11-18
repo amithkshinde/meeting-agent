@@ -205,8 +205,15 @@ final class CallProcessor {
     @MainActor
     private func identifyVoices(folder: URL, tracks: (you: [Utterance], them: [Utterance]), record: CallRecord) async -> Bool {
         let fm = FileManager.default
-        let system = folder.appendingPathComponent("system.m4a")
-        guard fm.fileExists(atPath: system.path), !tracks.them.isEmpty else { return false }
+        // If the call audio was blank (the other people were never recorded on it) but the microphone heard
+        // everyone, tell the voices apart on the microphone recording instead.
+        let seconds: ([Utterance]) -> Double = { $0.reduce(0) { $0 + max(0, $1.end - $1.start) } }
+        let youSeconds = seconds(tracks.you)
+        let themSeconds = seconds(tracks.them)
+        let micFile = folder.appendingPathComponent("mic.m4a")
+        let useMic = youSeconds > 120 && themSeconds < youSeconds * 0.15 && fm.fileExists(atPath: micFile.path)
+        let source = useMic ? micFile : folder.appendingPathComponent("system.m4a")
+        guard fm.fileExists(atPath: source.path), useMic ? !tracks.you.isEmpty : !tracks.them.isEmpty else { return false }
         guard Voices.beginAttempt() else { return false }
         defer { Voices.endAttempt() }
 
@@ -216,7 +223,7 @@ final class CallProcessor {
         let started = Date()
         let raw: [RawVoiceSegment]
         do {
-            raw = try await VoiceEngine.diarize(file: system)
+            raw = try await VoiceEngine.diarize(file: source)
         } catch {
             Log.error("voices", "Could not tell the voices apart: \(error.localizedDescription)")
             return false
@@ -226,14 +233,29 @@ final class CallProcessor {
             Log.warn("voices", "No speech found to tell apart in \(folder.lastPathComponent)")
             return false
         }
+        if useMic {
+            // On the microphone, the user is one of the voices. If there is only one real voice, it was just a monologue.
+            guard built.clusters.filter({ $0.seconds >= 15 }).count >= 2 else {
+                Log.info("voices", "\(folder.lastPathComponent): the call audio was blank but the microphone has only one voice, so nothing to separate")
+                return false
+            }
+            Log.warn("voices", "\(folder.lastPathComponent): the call audio was blank, so the voices were told apart on your microphone recording")
+        }
 
         let me = [CallProcessor.userName]
         let samples = SpeakerLog.load(folder).map { (t: $0.t, name: $0.name) }
         let attendees = (record.attendees ?? []).map { $0.name }
         let votes = ScreenEvidence.votes(segments: built.segments, samples: samples, exclude: me)
         var decisions = VoiceResolver.resolve(clusters: built.clusters, votes: votes, library: Voices.library, model: Voices.model, attendees: attendees, exclude: me)
-        let turns = VoiceTranscript.turns(you: tracks.you, them: tracks.them, segments: built.segments)
+        let turns = useMic
+            ? VoiceTranscript.turns(you: [], them: tracks.you, segments: built.segments)
+            : VoiceTranscript.turns(you: tracks.you, them: tracks.them, segments: built.segments)
         for index in decisions.indices { decisions[index].quote = VoiceTranscript.quote(for: decisions[index].id, in: turns) }
+        if useMic, let biggest = decisions.max(by: { $0.seconds < $1.seconds }), biggest.name == nil,
+           !decisions.contains(where: { $0.name.map { VoiceNames.same($0, CallProcessor.userName) } ?? false }),
+           let index = decisions.firstIndex(where: { $0.id == biggest.id }) {
+            decisions[index].suggestion = CallProcessor.userName
+        }
 
         let labels = VoiceResolver.labels(for: decisions, clusters: built.clusters)
         let text = VoiceTranscript.render(turns, labels: labels)
