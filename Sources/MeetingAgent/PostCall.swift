@@ -150,7 +150,9 @@ final class CallProcessor {
             let client = current.client
             let earlier = self.memory.context(client: client, excluding: id)
             let people = (current.attendees ?? []).map { $0.name }
-            let peopleLine = people.isEmpty ? "" : "People on the call besides the user: \(people.joined(separator: ", ")).\n\n"
+            let saved = (UserDefaults.standard.string(forKey: "userDisplayName") ?? "").trimmed
+            let selfLine = saved.isEmpty ? "" : "The user (\"You\") is named \(saved).\n"
+            let peopleLine = selfLine + (people.isEmpty ? "" : "People on the call besides the user: \(people.joined(separator: ", ")).\n") + (selfLine.isEmpty && people.isEmpty ? "" : "\n")
             let screens = ScreenIndex.load(folder)
             let marked = screens.count >= 2 ? ScreenIndex.annotate(transcript, screens: screens) : transcript
             let prompt = (earlier.isEmpty ? "" : "Earlier calls with this client:\n\(earlier)\n\n")

@@ -93,6 +93,7 @@ struct TranscriptList: View {
     let lines: [TLine]
     let speakers: [String]
     let follow: Bool
+    var youName: String = "You"
     var onRename: (String) -> Void
 
     private func color(for speaker: String) -> Color {
@@ -135,7 +136,7 @@ struct TranscriptList: View {
                 .foregroundStyle(.secondary)
                 .frame(width: 44, alignment: .leading)
             if !line.speaker.isEmpty {
-                Text(line.speaker)
+                Text(line.speaker == "You" ? youName : line.speaker)
                     .font(.callout.weight(.semibold))
                     .foregroundColor(color(for: line.speaker))
                     .lineLimit(1)
@@ -195,6 +196,13 @@ struct CallDetailSheet: View {
     @State private var renaming: String?
     @State private var newName = ""
     @State private var hasSpeakerData = false
+    @AppStorage("userDisplayName") private var savedYouName = ""
+
+    /// How your own lines are labelled on screen. The files keep "You".
+    private var youLabel: String {
+        let name = savedYouName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? "You" : name
+    }
 
     init(model: LibraryModel, call: CallRecord) {
         self.model = model
@@ -231,7 +239,9 @@ struct CallDetailSheet: View {
             Button("Rename") { applyRename() }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This changes every line from this speaker in this call.")
+            Text(renaming == "You"
+                 ? "This is the name shown for your own lines, in every call on this Mac. You can change it any time, here or in Settings."
+                 : "This changes every line from this speaker in this call.")
         }
         .onAppear(perform: load)
     }
@@ -451,7 +461,8 @@ struct CallDetailSheet: View {
                     lines: shownLines,
                     speakers: Transcript.speakers(in: lines),
                     follow: follow,
-                    onRename: { name in renaming = name; newName = name }
+                    youName: youLabel,
+                    onRename: { name in renaming = name; newName = name == "You" ? savedYouName : name }
                 )
                 .card(padding: 8)
             }
@@ -460,7 +471,7 @@ struct CallDetailSheet: View {
 
     /// Everyone on the other side of the call, each with a button to give them a name or correct it.
     private var speakersStrip: some View {
-        let names = Transcript.speakers(in: lines).filter { $0 != "You" }
+        let names = Transcript.speakers(in: lines)
         return Group {
             if !names.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -469,12 +480,16 @@ struct CallDetailSheet: View {
                         ForEach(names, id: \.self) { name in
                             Button {
                                 renaming = name
-                                newName = (name == "Them" || name.hasPrefix("Speaker ")) ? "" : name
+                                if name == "You" {
+                                    newName = savedYouName
+                                } else {
+                                    newName = (name == "Them" || name.hasPrefix("Speaker ")) ? "" : name
+                                }
                             } label: {
-                                Label(name, systemImage: "pencil")
+                                Label(name == "You" ? youLabel : name, systemImage: "pencil")
                             }
                             .buttonStyle(SoftButtonStyle())
-                            .help("Name or rename this speaker. I'll remember their voice for next time.")
+                            .help(name == "You" ? "Set the name shown for your own lines." : "Name or rename this speaker. I'll remember their voice for next time.")
                         }
                     }
                 }
@@ -721,6 +736,11 @@ struct CallDetailSheet: View {
         let name = newName.trimmingCharacters(in: .whitespacesAndNewlines)
         renaming = nil
         guard !name.isEmpty, name != old else { return }
+        if old == "You" {
+            savedYouName = name
+            message = "Your lines now show as “\(name)”."
+            return
+        }
         for file in ["transcript.txt", "transcript-clean.txt", "transcript-en.txt"] {
             let url = folder.appendingPathComponent(file)
             guard let text = try? String(contentsOf: url, encoding: .utf8) else { continue }
