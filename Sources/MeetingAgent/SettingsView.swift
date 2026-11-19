@@ -362,7 +362,7 @@ struct SettingsView: View {
     private var dataCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Your data").font(.headline)
-            Text("Everything is stored on this Mac, in Movies › MeetingAgent: each call's video, audio, transcript and summary, plus your projects, notes and files. Your AI key is kept in the macOS Keychain.")
+            Text("Everything is stored on this Mac, in Movies › MeetingAgent: each call's video, audio, transcript and summary, plus your projects, notes and files. Your AI key is kept in a private file on this Mac that only your user account can read.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

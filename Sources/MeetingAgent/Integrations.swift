@@ -104,42 +104,11 @@ enum RemindersExport {
 
 // MARK: - Notion
 
-/// Small keychain wrapper for extra secrets. The AI key has its own.
+/// Extra secrets (Notion). Same private store as the AI key.
 enum SecretStore {
-    private static let service = "com.amithshinde.meetingagent"
-
-    static func read(_ account: String) -> String? {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne,
-        ]
-        var item: CFTypeRef?
-        guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess, let data = item as? Data else { return nil }
-        return String(data: data, encoding: .utf8)
-    }
-
-    static func save(_ value: String, account: String) {
-        delete(account)
-        let attributes: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-            kSecValueData as String: Data(value.utf8),
-        ]
-        SecItemAdd(attributes as CFDictionary, nil)
-    }
-
-    static func delete(_ account: String) {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-        ]
-        SecItemDelete(query as CFDictionary)
-    }
+    static func read(_ account: String) -> String? { SecureStore.read(account) }
+    static func save(_ value: String, account: String) { SecureStore.save(value, account: account) }
+    static func delete(_ account: String) { SecureStore.delete(account) }
 }
 
 enum NotionService {

@@ -1,45 +1,75 @@
 import Foundation
 import Security
 
-/// Stores the API key in the macOS Keychain, never in a file.
-enum Keychain {
+/// Saves small secrets (the AI key, Notion token) so they survive updates without ever asking for a password.
+/// The copy that counts is a private file only you can read (Application Support/MeetingAgent/secrets).
+/// The macOS Keychain is tried too, but never in a way that can show a password window: an app signed without
+/// a permanent certificate is a stranger to the Keychain after every update, and the prompt it caused froze the app.
+enum SecureStore {
     private static let service = "com.amithshinde.meetingagent"
-    private static let account = "anthropic-api-key"
 
-    static func read() -> String? {
-        let query: [String: Any] = [
+    private static var folder: URL {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("MeetingAgent/secrets", isDirectory: true)
+        try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        return base
+    }
+
+    private static func file(_ account: String) -> URL {
+        folder.appendingPathComponent(account.replacingOccurrences(of: "/", with: "_"))
+    }
+
+    private static func baseQuery(_ account: String) -> [String: Any] {
+        [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne,
+            // Fail quietly instead of showing a password window.
+            kSecUseAuthenticationUI as String: kSecUseAuthenticationUIFail,
         ]
+    }
+
+    static func read(_ account: String) -> String? {
+        if let data = try? Data(contentsOf: file(account)), let text = String(data: data, encoding: .utf8), !text.isEmpty { return text }
+        var query = baseQuery(account)
+        query[kSecReturnData as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
         var item: CFTypeRef?
         guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
-              let data = item as? Data else { return nil }
-        return String(data: data, encoding: .utf8)
+              let data = item as? Data, let text = String(data: data, encoding: .utf8) else { return nil }
+        // Found in the Keychain from an older version: keep a private copy so this never depends on it again.
+        write(text, account: account)
+        return text
     }
 
-    static func save(_ value: String) {
-        delete()
-        let attributes: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-            kSecValueData as String: Data(value.utf8),
-        ]
+    private static func write(_ value: String, account: String) {
+        let url = file(account)
+        try? Data(value.utf8).write(to: url, options: .atomic)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+    }
+
+    static func save(_ value: String, account: String) {
+        write(value, account: account)
+        // Best effort, and quiet. A stale item from an older build is left alone.
+        SecItemDelete(baseQuery(account) as CFDictionary)
+        var attributes = baseQuery(account)
+        attributes[kSecValueData as String] = Data(value.utf8)
         let status = SecItemAdd(attributes as CFDictionary, nil)
-        if status != errSecSuccess { Log.write("could not save API key to Keychain (status \(status))") }
+        if status != errSecSuccess { Log.write("kept the secret in a private file (Keychain status \(status))") }
     }
 
-    static func delete() {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-        ]
-        SecItemDelete(query as CFDictionary)
+    static func delete(_ account: String) {
+        try? FileManager.default.removeItem(at: file(account))
+        SecItemDelete(baseQuery(account) as CFDictionary)
     }
+}
+
+/// Stores the AI key.
+enum Keychain {
+    private static let account = "anthropic-api-key"
+    static func read() -> String? { SecureStore.read(account) }
+    static func save(_ value: String) { SecureStore.save(value, account: account) }
+    static func delete() { SecureStore.delete(account) }
 }
 
 enum ChatError: LocalizedError {

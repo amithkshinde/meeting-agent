@@ -1,9 +1,9 @@
-Fixes calls that went silent, writes meeting minutes automatically, reads names from the video, and removes the echo.
+Fixes the password window that froze the app, and makes call notes match what was actually said.
 
-- Recordings no longer start twice, and a call whose sound goes blank is noticed and recovered.
-- Every call gets minutes of meeting (summary, decisions, action items, open questions).
-- After a call the app reads speaker names from the video and looks again when more people are on screen than were found.
-- Playback uses the call sound with your microphone ducked while others talk, so the echo is gone. The transcript filter drops echoed "You" lines.
-- A Mac Intel installer is now published alongside Apple Silicon.
+- The app no longer asks for a Keychain password after an update. Your AI key is kept in a private file only your user account can read.
+- Notes are written from the call you just had, not from earlier calls, and anything that isn't in the transcript is dropped.
+- A call whose microphone file is empty is still transcribed from the call audio, and the microphone recording keeps going if the sound format changes.
+- New "Redo this call" button writes the transcript and notes again from the saved audio.
+- Repeated headings, duplicate bullets and garbled names are cleaned from the minutes.
 
-Released 18 November 2026.
+Released 19 November 2026.

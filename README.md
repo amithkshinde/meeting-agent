@@ -126,7 +126,7 @@ You need Xcode or the Xcode Command Line Tools (`xcode-select --install`) to bui
 
 **Privacy**
 - Recordings, transcripts and notes stay on your Mac, in Movies > MeetingAgent.
-- Only text is ever sent to the AI, never audio or video. The key is kept in the macOS Keychain.
+- Only text is ever sent to the AI, never audio or video. The key is kept in a private file on your Mac that only your user account can read, so updates never ask for a password.
 - Choose "On this Mac only" in Settings, or per project, to use Apple's on-device model so nothing leaves the Mac. Projects marked this way are also kept out of cloud searches.
 - Tell people on the call that you are recording. Laws on recording differ by place.
 

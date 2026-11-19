@@ -283,7 +283,7 @@ struct AISetupGuide: View {
                     .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true).padding(.top, 4)
             }
             DisclosureGroup("Is my key safe?") {
-                Text("It is stored in your Mac's Keychain, not in a file, and it is only sent to Google or Anthropic to get answers. Don't share it. If it ever leaks, delete it on the provider's website and make a new one.")
+                Text("It is stored privately on this Mac and never shown again, and it is only sent to Google or Anthropic to get answers. Don't share it. If it ever leaks, delete it on the provider's website and make a new one.")
                     .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true).padding(.top, 4)
             }
             DisclosureGroup("What gets sent to the AI?") {
