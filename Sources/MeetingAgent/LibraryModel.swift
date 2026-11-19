@@ -440,6 +440,14 @@ final class LibraryModel: ObservableObject {
         reload()
     }
 
+    // MARK: - Redo a call
+
+    /// Runs the whole after-call work again (transcript, names, summary, promises) from the saved recording.
+    func reprocess(_ call: CallRecord) {
+        guard let processor else { return }
+        processor.process(folder: Self.folder(for: call), wait: false)
+    }
+
     // MARK: - Follow-up email
 
     func draftFollowUp(for call: CallRecord) async throws -> (subject: String, body: String) {

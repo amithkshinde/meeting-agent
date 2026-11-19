@@ -212,6 +212,7 @@ struct CallDetailSheet: View {
     @State private var feedback: [ScreenFeedback] = []
     @State private var project = ""
     @State private var showFollowUp = false
+    @State private var redoStarted = false
     @State private var busy = ""
     @State private var message = ""
     @State private var renaming: String?
@@ -348,6 +349,13 @@ struct CallDetailSheet: View {
                     .disabled(current.summary.isEmpty)
                 Button("Show files") { NSWorkspace.shared.activateFileViewerSelecting([folder]) }
                     .buttonStyle(SoftButtonStyle())
+                Button("Redo this call") { model.reprocess(call); redoStarted = true }
+                    .buttonStyle(SoftButtonStyle())
+                    .help("Transcribes the saved audio again and writes new notes. Takes a few minutes.")
+            }
+            if redoStarted {
+                Text("Working on it. The new transcript and notes replace the old ones in a few minutes; close and reopen this call to see them.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
 
             if hasVideo, !hasSpeakerData, shots.isEmpty {
