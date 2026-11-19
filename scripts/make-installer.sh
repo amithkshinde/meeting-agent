@@ -95,7 +95,8 @@ TXT
   # 3. Make the disk image and check it.
   rm -f "$DMG"
   hdiutil create -volname "Meeting Agent" -srcfolder "$STAGE" -ov -format UDZO "$DMG" >/dev/null
-  hdiutil verify "$DMG" >/dev/null
+  ok=0; for try in 1 2 3 4 5; do if hdiutil verify "$DMG" >/dev/null 2>&1; then ok=1; break; fi; sleep 5; done
+  [ "$ok" = 1 ] || { echo "The disk image failed verification" >&2; exit 1; }
   echo "Ready: $DMG  ($(du -h "$DMG" | cut -f1))"
 }
 
