@@ -4,6 +4,19 @@ A floating Mac agent that notices when you join a call, records and transcribes 
 
 Built by Amith K Shinde. Native macOS app in Swift and SwiftUI.
 
+## What's new in 0.3.0 (released 18 November 2026)
+
+- **Minutes of meeting, automatic.** Every call ends with a summary, discussion, decisions, action items with real names, open questions and what to raise next time.
+- **Names read from the call video (Mac).** After each call the app watches the video, sees who is speaking and matches the name to the voice. If more people were on screen than it heard, it looks again.
+- **No more echo.** With speakers on, the mic used to hear the call. Playback now uses the call sound plus your mic only while others are quiet, and the transcript drops echoed "You" lines.
+- **More reliable recording (Mac).** No double recordings. If the call sound goes blank the app notices, tries to reconnect, warns you, and falls back to your mic to find voices.
+- **Activity log and health report.** If the app closes suddenly, open Settings > Recorder health to see how each recording ended, then press Send report. Secrets and emails are removed from the log.
+- **Transcripts on your computer.** English is written locally with Parakeet. On Windows, Hindi and Hinglish use your own Gemini key.
+- **In-app updates.** A banner offers the new version when one is published.
+- **Mac Intel installer** alongside Apple Silicon. Windows gets the same log, health report, update check and local transcripts.
+
+Older versions and their notes are on the [Releases page](https://github.com/amithkshinde/meeting-agent/releases).
+
 ## Install (no Terminal needed)
 
 1. Download or clone this folder.

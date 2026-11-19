@@ -5,3 +5,5 @@ Fixes calls that went silent, writes meeting minutes automatically, reads names 
 - After a call the app reads speaker names from the video and looks again when more people are on screen than were found.
 - Playback uses the call sound with your microphone ducked while others talk, so the echo is gone. The transcript filter drops echoed "You" lines.
 - A Mac Intel installer is now published alongside Apple Silicon.
+
+Released 18 November 2026.

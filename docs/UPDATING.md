@@ -26,7 +26,8 @@ then merge. Merging to `main` updates the website by itself. A release only happ
 1. **Raise the version** in `Resources/Info.plist`: `CFBundleShortVersionString` (for example `0.3.0` to `0.4.0`)
    and add one to `CFBundleVersion`. It must be higher than the last release or nobody is told.
 2. **Write the release notes** in `RELEASE_NOTES.md`. The **first line** is what people see in the banner, so make it
-   one plain sentence.
+   one plain sentence. Then update **What's new** in `README.md` and in the `#new` section of `index.html` so the website
+   and GitHub front page tell people what changed. Always put the release date in all three (for example "Released 18 November 2026").
 3. Commit these on a branch, open a pull request, and merge it once Check is green.
 4. **Start the build.** Easiest: on GitHub open **Actions > Release Mac app > Run workflow**, keep branch `main`, type
    `v0.4.0` (a `v` plus the exact number from step 1) and press the green button. (Terminal alternative:
