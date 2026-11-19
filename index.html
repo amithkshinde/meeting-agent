@@ -12,7 +12,7 @@ function dark(m){return m==="dark"||(m==="auto"&&((window.matchMedia&&matchMedia
 window.__theme={dark:dark,night:night};
 document.documentElement.setAttribute("data-theme",dark(m)?"dark":"light")})();
 </script>
-<meta name="description" content="A free, open source floating call copilot for Mac and Windows. Detects calls, records and transcribes in English and Hindi, and suggests what to say next.">
+<meta name="description" content="A free, open source floating call copilot for Mac and Windows. Detects calls, records and transcribes on your own computer, and suggests what to say next.">
 <style>
 :root{--paper:#fff;--mist:#f5f5f7;--mist-2:#fafafb;--ink:#1d1d1f;--ink-2:#515154;--ink-3:#6e6e73;--line:rgba(0,0,0,.08);--line-2:rgba(0,0,0,.14);
 --acc:#f2402a;--acc-hi:#ff6a52;--acc-wash:#fff0ed;--acc-ink:#b3200d;--ok:#1f7a3d;
@@ -228,7 +228,7 @@ footer a{text-decoration:none}footer a:hover{color:var(--ink)}
 
 <main id="main">
 <header class="hero" id="top"><div class="wrap">
-  <a class="ann" href="#features"><b>New</b>Hindi and English in the same call</a>
+  <a class="ann" href="#features"><b>New</b>Minutes of meeting, written for you</a>
   <h1>The call copilot that remembers everything.</h1>
   <p class="lede">Meeting Agent floats on your screen, notices when a call starts, records and transcribes it, and shows what to say next, based on everything you have already discussed.</p>
   <div class="cta">
@@ -257,7 +257,7 @@ footer a{text-decoration:none}footer a:hover{color:var(--ink)}
     <div class="dock" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
   </div>
   <p class="cap">Meeting Agent runs on your computer, above whatever call app you already use.</p>
-  <ul class="trust"><li>No bot joins your call</li><li>Works with Meet, Teams and more</li><li>English and Hindi</li><li>Open source, MIT</li></ul>
+  <ul class="trust"><li>No bot joins your call</li><li>Works with Meet, Teams and more</li><li>Transcripts on your computer</li><li>Open source, MIT</li></ul>
 </div></header>
 
 <section class="band" id="how"><div class="wrap">
@@ -274,7 +274,7 @@ footer a{text-decoration:none}footer a:hover{color:var(--ink)}
   <div class="feat"><div class="txt"><h3>It notices the call</h3><p>Meet, Teams and other call apps are detected automatically, including unscheduled ones that never hit your calendar.</p></div>
     <div class="stage"><div class="chips"><span class="chip"><i class="rd"></i>Call detected</span><span class="chip">Google Meet</span><span class="chip">Recording started</span></div><div class="bub"><b>Detected</b>Weekly sync with Ravi and Priya</div></div></div>
 
-  <div class="feat"><div class="txt"><h3>It records and transcribes in two languages</h3><p>Screen and audio are captured, then turned into a transcript as you talk. Hindi and English both work, even in the same sentence.</p></div>
+  <div class="feat"><div class="txt"><h3>It records and transcribes on your computer</h3><p>Screen and audio are captured, then turned into a transcript on your own machine. English and 24 other European languages work on Mac and Windows. Hindi and Hinglish work on Windows with your own Gemini key.</p></div>
     <div class="stage"><div class="bub"><b>Ravi</b>Can we ship by next week?</div><div class="bub"><b>You</b><span class="hi">हाँ, Nov 12 तक।</span></div><div class="bub"><b>Priya</b><span class="hi">Budget approve होने के बाद start करेंगे।</span></div></div></div>
 
   <div class="feat"><div class="txt"><h3>It helps while you talk</h3><p>Glance at the floating card for a suggested answer drawn from past calls, or a quick recap of the last few points.</p></div>
@@ -301,7 +301,7 @@ footer a{text-decoration:none}footer a:hover{color:var(--ink)}
     <div><h3>No more echo</h3><p>If you use speakers, your mic hears the call. Playback now uses the call sound on its own, and your own voice only when others are quiet. Echoed lines no longer show up as things you said.</p></div>
     <div><h3>A recording that does not give up</h3><p>No more double recordings. If the call sound goes blank the app notices, tries to reconnect and warns you. If it cannot, it still finds the voices from your microphone. <em>Mac.</em></p></div>
     <div><h3>If it crashes, you can see why</h3><p>The app keeps a private activity log. Settings &rsaquo; Recorder health shows how each recording ended and sends a report in one click. Keys and emails are never in it.</p></div>
-    <div><h3>Transcripts stay on your computer</h3><p>English is written on your own machine, so call audio never leaves it. On Windows, Hindi and Hinglish still use your own Gemini key.</p></div>
+    <div><h3>Transcripts stay on your computer</h3><p>Mac and Windows both write English, and 24 other European languages, on your own computer with Parakeet, so call audio never leaves it. Parakeet does not support Hindi or Hinglish. On Windows those use your own Gemini key; the Mac app does not offer them.</p></div>
     <div><h3>Updates in one click</h3><p>When a new version is out, a banner appears in the app with a Download button. Your calls and settings stay put.</p></div>
     <div><h3>Mac Intel is here</h3><p>There is now an installer for Intel Macs, next to Apple Silicon and Windows.</p></div>
   </div>
@@ -312,7 +312,7 @@ footer a{text-decoration:none}footer a:hover{color:var(--ink)}
   <div class="sec-head"><h2>The details.</h2></div>
   <ul class="spec">
     <li><span>Platforms</span><span>macOS (Apple silicon and Intel), Windows 10 and 11</span></li>
-    <li><span>Languages</span><span>English, Hindi, and mixed</span></li>
+    <li><span>Languages</span><span>English and 24 European languages on Mac and Windows. Hindi and Hinglish on Windows only, with a Gemini key</span></li>
     <li><span>Call apps</span><span>Google Meet, Microsoft Teams and similar</span></li>
     <li><span>AI provider</span><span>Your own key: Claude, ChatGPT, Gemini and more</span></li>
     <li><span>Price</span><span>Free</span></li>
@@ -325,7 +325,7 @@ footer a{text-decoration:none}footer a:hover{color:var(--ink)}
   <div class="card">
     <div class="price">Free</div>
     <p style="margin-top:10px;color:var(--ink-3)">Open source. No account, no card.</p>
-    <ul><li>Auto-detects calls</li><li>Transcripts in English and Hindi</li><li>Suggested replies and recaps</li><li>Post-call summaries</li></ul>
+    <ul><li>Auto-detects calls</li><li>Transcripts written on your computer</li><li>Suggested replies and recaps</li><li>Post-call summaries</li></ul>
   </div>
   <div class="tri" id="dl-list">
     <a class="card3" data-k="arm" href="#" target="_blank" rel="noopener"><div><strong>Mac, Apple Silicon</strong><span>M1, M2, M3, M4 &middot; .dmg</span></div><span class="go">Download</span></a>
@@ -338,7 +338,7 @@ footer a{text-decoration:none}footer a:hover{color:var(--ink)}
   <div><h2>Before you download.</h2><p style="margin-top:14px;color:var(--ink-3)">Anything else, write to me from the Contact section.</p></div>
   <div class="faq">
     <details><summary>Is it really free?</summary><p>Yes. Meeting Agent itself is free and open source under the MIT License. For chat, recaps and summaries you bring your own AI key from a provider such as Claude, ChatGPT or Gemini. Any usage cost is between you and that provider.</p></details>
-    <details><summary>Which languages does it understand?</summary><p>English and Hindi, including calls where people switch between them.</p></details>
+    <details><summary>Which languages does it understand?</summary><p>English and 24 other European languages, on Mac and Windows. Hindi and Hinglish are not supported by the on-device engine, so they work only on Windows, using your own Gemini key.</p></details>
     <details><summary>Which call apps does it work with?</summary><p>It detects calls on Google Meet, Microsoft Teams and similar apps running on your computer, including calls that were never on your calendar.</p></details>
     <details><summary>Is there a Windows version?</summary><p>Yes. It lives in <a href="https://github.com/amithkshinde/meeting-agent-windows" target="_blank" rel="noopener">meeting-agent-windows</a>. There is a ready-made installer (.exe), and it records calls, writes transcripts and summaries, keeps promises, searches everything, and offers optional live captions with suggested replies, projects, an Ask page and PDF export. A few Mac extras, such as speaker names from the video and design review, are not on Windows yet. Windows may warn that the app is unsigned: click More info, then Run anyway.</p></details>
     <details><summary>Should I tell people I am recording?</summary><p>Yes. Recording rules differ by country and company, so tell participants and get their consent before you record.</p></details>
