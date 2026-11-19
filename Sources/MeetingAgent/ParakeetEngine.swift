@@ -109,8 +109,22 @@ final class ParakeetEngine: ObservableObject {
         do {
             var you: [Utterance] = []
             var them: [Utterance] = []
-            if fm.fileExists(atPath: mic.path) { you = try await transcribe(file: mic) }
-            if fm.fileExists(atPath: system.path) { them = try await transcribe(file: system) }
+            // A track that is empty or broken (for example a mic file that never got any sound) is skipped,
+            // so the other track still gets transcribed instead of the whole call falling back to the live text.
+            if AudioFiles.isUsable(mic) {
+                do { you = try await transcribe(file: mic) }
+                catch { Log.warn("parakeet", "Could not read mic.m4a (\(error.localizedDescription)); using the call audio only") }
+            } else if fm.fileExists(atPath: mic.path) {
+                Log.warn("parakeet", "mic.m4a in \(folder.lastPathComponent) holds no usable sound; using the call audio only")
+            }
+            if AudioFiles.isUsable(system) {
+                do { them = try await transcribe(file: system) }
+                catch { Log.warn("parakeet", "Could not read system.m4a (\(error.localizedDescription))") }
+            }
+            if you.isEmpty && them.isEmpty && !AudioFiles.isUsable(mic) && !AudioFiles.isUsable(system) {
+                Log.warn("parakeet", "No usable audio in \(folder.lastPathComponent); keeping the live transcript")
+                return false
+            }
             you = TranscriptBuilder.removeEchoes(you: you, them: them)
             let text = TranscriptBuilder.merge(you: you, them: them, youName: youName)
             guard text.count > 20 else {
@@ -138,4 +152,13 @@ final class ParakeetEngine: ObservableObject {
 enum ParakeetError: LocalizedError {
     case notReady
     var errorDescription: String? { "Parakeet is not ready yet." }
+}
+
+enum AudioFiles {
+    /// True when the file exists and holds at least one second of sound.
+    static func isUsable(_ url: URL) -> Bool {
+        let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? 0
+        guard size > 2_000, let file = try? AVAudioFile(forReading: url) else { return false }
+        return file.fileFormat.sampleRate > 0 && Double(file.length) / file.fileFormat.sampleRate >= 1.0
+    }
 }

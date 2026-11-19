@@ -34,7 +34,7 @@ enum CleanPlayback {
 
             guard try await addAudio(systemURL) != nil else { return nil }
             let item = AVPlayerItem(asset: composition)
-            if fm.fileExists(atPath: micURL.path), let micTrack = try await addAudio(micURL) {
+            if AudioFiles.isUsable(micURL), let micTrack = try? await addAudio(micURL) {
                 let system = levels(of: systemURL)
                 let params = AVMutableAudioMixInputParameters(track: micTrack)
                 apply(duckingFor: system, to: params)

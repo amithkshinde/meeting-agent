@@ -32,10 +32,11 @@ final class CallProcessor {
     Discussion is short bullets grouped by topic, each saying who raised or decided what. \
     Action items are one bullet each, written as the person's actual name, a colon, the task, and the due date if one was mentioned. Never write the word "Owner". If nobody was named for a task, write "Not assigned:". \
     Do not copy these instructions into the headings. \
-    Write "None." for an empty section. Only use what the transcript says. Do not write the date or the attendee list, they are added for you.
+    Write "None." for an empty section. Use only what is said in the transcript of this call: every bullet must be something someone actually said in it. Never add products, features, numbers, names or tasks that are not in the transcript, and never repeat a bullet under a second heading. If the call is short or says little, write a short summary and "None." in the other sections. Do not write the date or the attendee list, they are added for you.
     """
 
     /// The distinct speakers named in a transcript, for the MOM header.
+    /// Labels that are not a plausible name (screen-reading noise) are ignored, and "Rahul" next to "Rahul Raju" is one person.
     static func attendees(in transcript: String, you: String) -> [String] {
         var seen: [String] = []
         for line in transcript.components(separatedBy: "\n") {
@@ -43,11 +44,21 @@ final class CallProcessor {
             let rest = line[line.index(after: close)...].trimmingCharacters(in: .whitespaces)
             guard let colon = rest.firstIndex(of: ":") else { continue }
             let label = String(rest[..<colon]).trimmingCharacters(in: .whitespaces)
-            guard !label.isEmpty, label.count < 40, label != "You", label != "Them", !seen.contains(label) else { continue }
+            guard !label.isEmpty, label.count < 40, label != "You", label != "Them", plausibleName(label), !seen.contains(label) else { continue }
             seen.append(label)
         }
+        // Fold a first name into the fuller name that starts with it.
+        let folded = seen.filter { name in
+            !seen.contains { other in other != name && other.lowercased().hasPrefix(name.lowercased() + " ") }
+        }
         let me = you.trimmingCharacters(in: .whitespaces)
-        return [me.isEmpty ? "You" : "\(me) (You)"] + seen.filter { !VoiceNames.same($0, me) }
+        return [me.isEmpty ? "You" : "\(me) (You)"] + folded.filter { !VoiceNames.same($0, me) }
+    }
+
+    /// Letters, spaces, hyphens, apostrophes and full stops only, and at least two letters.
+    static func plausibleName(_ label: String) -> Bool {
+        guard label.filter({ $0.isLetter }).count >= 2 else { return false }
+        return label.allSatisfy { $0.isLetter || $0 == " " || $0 == "-" || $0 == "'" || $0 == "." || $0.isNumber }
     }
 
     /// Added to the summary prompt when the call shared several screens (a design review).
@@ -169,19 +180,20 @@ final class CallProcessor {
             // 2. Summary.
             let current = self.memory.records.first(where: { $0.id == id }) ?? first
             let client = current.client
-            let earlier = self.memory.context(client: client, excluding: id)
             let people = (current.attendees ?? []).map { $0.name }
             let saved = (UserDefaults.standard.string(forKey: "userDisplayName") ?? "").trimmed
             let selfLine = saved.isEmpty ? "" : "The user (\"You\") is named \(saved).\n"
             let peopleLine = selfLine + (people.isEmpty ? "" : "People on the call besides the user: \(people.joined(separator: ", ")).\n") + (selfLine.isEmpty && people.isEmpty ? "" : "\n")
-            let screens = ScreenIndex.load(folder)
+            let screens = ScreenIndex.meaningful(ScreenIndex.load(folder))
             let marked = screens.count >= 2 ? ScreenIndex.annotate(transcript, screens: screens) : transcript
-            let prompt = (earlier.isEmpty ? "" : "Earlier calls with this client:\n\(earlier)\n\n")
-                + peopleLine
+            let prompt = peopleLine
                 + "Transcript of this call:\n\(String(marked.suffix(60_000)))\n\nWrite the notes now."
             do {
                 let system = CallProcessor.summarySystem + (screens.count >= 2 ? CallProcessor.byScreenNote : "")
-                let summary = try await ChatService.complete(key: key, system: system, prompt: prompt, maxTokens: screens.count >= 2 ? 2000 : 1500)
+                let drafted = try await ChatService.complete(key: key, system: system, prompt: prompt, maxTokens: screens.count >= 2 ? 2000 : 1500)
+                let checked = SummaryGuard.clean(drafted, transcript: transcript)
+                if checked.dropped > 0 { Log.warn("summary", "Removed \(checked.dropped) bullet(s) that were repeated or not in the transcript") }
+                let summary = checked.text
                 let formatter = DateFormatter()
                 formatter.dateStyle = .medium
                 formatter.timeStyle = .short

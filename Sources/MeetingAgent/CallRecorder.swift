@@ -34,30 +34,63 @@ final class AudioTrackWriter {
         self.queue = DispatchQueue(label: "meetingagent.track.\(name)")
     }
 
+    private var converter: AVAudioConverter?
+    private var converterInput: AVAudioFormat?
+    private var failures = 0
+
     func append(_ sampleBuffer: CMSampleBuffer) {
         queue.async { [self] in
             guard sampleBuffer.isValid, CMSampleBufferGetNumSamples(sampleBuffer) > 0,
-                  let buffer = Self.pcmBuffer(from: sampleBuffer) else { return }
-            onBuffer?(buffer)
+                  let raw = Self.pcmBuffer(from: sampleBuffer) else { return }
+            onBuffer?(raw)
             do {
+                // Every buffer is converted to one fixed format (float, one channel at the first buffer's rate),
+                // so a format that changes mid-call, which the encoder refuses, cannot stop the recording.
                 if file == nil {
-                    let format = buffer.format
+                    let rate = raw.format.sampleRate
                     let settings: [String: Any] = [
                         AVFormatIDKey: kAudioFormatMPEG4AAC,
-                        AVSampleRateKey: format.sampleRate,
-                        AVNumberOfChannelsKey: format.channelCount,
-                        AVEncoderBitRateKey: 96_000,
+                        AVSampleRateKey: rate,
+                        AVNumberOfChannelsKey: 1,
+                        AVEncoderBitRateKey: 64_000,
                     ]
-                    file = try AVAudioFile(
-                        forWriting: url,
-                        settings: settings,
-                        commonFormat: format.commonFormat,
-                        interleaved: format.isInterleaved
-                    )
+                    file = try AVAudioFile(forWriting: url, settings: settings, commonFormat: .pcmFormatFloat32, interleaved: false)
+                    converter = nil
                 }
-                try file?.write(from: buffer)
+                guard let file else { return }
+                let out = file.processingFormat
+                let buffer: AVAudioPCMBuffer
+                if raw.format == out {
+                    buffer = raw
+                } else {
+                    if converter == nil || converterInput != raw.format {
+                        converter = AVAudioConverter(from: raw.format, to: out)
+                        converterInput = raw.format
+                    }
+                    guard let converter else { throw NSError(domain: "recorder", code: 1, userInfo: [NSLocalizedDescriptionKey: "no converter for \(raw.format)"]) }
+                    let ratio = out.sampleRate / raw.format.sampleRate
+                    let capacity = AVAudioFrameCount(Double(raw.frameLength) * ratio) + 64
+                    guard let converted = AVAudioPCMBuffer(pcmFormat: out, frameCapacity: capacity) else { return }
+                    var supplied = false
+                    var convertError: NSError?
+                    let status = converter.convert(to: converted, error: &convertError) { _, inputStatus in
+                        if supplied { inputStatus.pointee = .noDataNow; return nil }
+                        supplied = true
+                        inputStatus.pointee = .haveData
+                        return raw
+                    }
+                    if status == .error { throw convertError ?? NSError(domain: "recorder", code: 2) }
+                    buffer = converted
+                }
+                try file.write(from: buffer)
+                if failures > 0 { Log.info("recorder", "\(name) audio is being written again after \(failures) failed buffers") }
+                failures = 0
             } catch {
-                Log.error("recorder", "\(name) audio write failed: \(error.localizedDescription)")
+                failures += 1
+                // Log the first failure and then now and then, not thousands of identical lines.
+                if failures == 1 || failures % 500 == 0 {
+                    Log.error("recorder", "\(name) audio write failed (\(failures) so far): \(error.localizedDescription)")
+                }
             }
         }
     }

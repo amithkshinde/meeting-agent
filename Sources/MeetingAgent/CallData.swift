@@ -75,6 +75,13 @@ enum ScreenIndex {
 }
 
 extension ScreenIndex {
+    /// Screens that really changed: a new one within 30 s of the last is the same slide still settling.
+    static func meaningful(_ screens: [ScreenShot]) -> [ScreenShot] {
+        var out: [ScreenShot] = []
+        for shot in screens where out.last.map({ shot.t - $0.t >= 30 }) ?? true { out.append(shot) }
+        return out
+    }
+
     /// The transcript with a marker line wherever a new screen came up, for the AI.
     static func annotate(_ raw: String, screens: [ScreenShot]) -> String {
         var out: [String] = []
