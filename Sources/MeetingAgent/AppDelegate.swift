@@ -66,6 +66,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     func applicationDidFinishLaunching(_ notification: Notification) {
         if offerMoveToApplications() { return }
         let uncleanExit = Log.startSession()
+        if ScreenAccessHealer.healIfNeeded() { _ = CGRequestScreenCaptureAccess() }
         if Bundle.main.object(forInfoDictionaryKey: "CFBundleIconFile") == nil {
             NSApp.applicationIconImage = AppIcon.make()
         }

@@ -1,9 +1,7 @@
-Fixes the password window that froze the app, and makes call notes match what was actually said.
+Fixes Screen Recording showing as not allowed after an update or reinstall.
 
-- The app no longer asks for a Keychain password after an update. Your AI key is kept in a private file only your user account can read.
-- Notes are written from the call you just had, not from earlier calls, and anything that isn't in the transcript is dropped.
-- A call whose microphone file is empty is still transcribed from the call audio, and the microphone recording keeps going if the sound format changes.
-- New "Redo this call" button writes the transcript and notes again from the saved audio.
-- Repeated headings, duplicate bullets and garbled names are cleaned from the minutes.
+- After an update, the app clears the leftover Screen Recording entry on its own and asks macOS again, so it can be allowed in one click instead of digging through Settings.
+- A "Reopen Meeting Agent" button in setup restarts the app once Screen Recording is on, which macOS needs before it notices.
+- The password window fix, call notes that match the call, and the "Redo this call" button from 0.3.1 are included.
 
-Released 19 November 2026.
+Released 23 November 2026.

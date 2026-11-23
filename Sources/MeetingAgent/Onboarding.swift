@@ -117,11 +117,15 @@ struct OnboardingSheet: View {
                               why: "Turns the audio into text. It happens on your Mac.") { model.grant(.speech) }
             }
             .card()
-            Text("If Screen Recording still shows as not allowed after you switch it on, quit and reopen Meeting Agent. Setup will be waiting here.")
+            Text("After you switch Screen Recording on, macOS needs the app to open again before it notices. Setup will be waiting here.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
+            if !model.setup.screen {
+                Button("Reopen Meeting Agent") { ScreenAccessHealer.relaunch() }
+                    .buttonStyle(SoftButtonStyle())
+            }
         }
     }
 

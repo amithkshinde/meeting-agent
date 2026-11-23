@@ -159,6 +159,7 @@ final class LibraryModel: ObservableObject {
     func grant(_ permission: Permission) {
         switch permission {
         case .screen:
+            ScreenAccessHealer.healIfNeeded()
             if !CGRequestScreenCaptureAccess() { openSettingsPane("Privacy_ScreenCapture") }
         case .mic:
             AVCaptureDevice.requestAccess(for: .audio) { [weak self] granted in
