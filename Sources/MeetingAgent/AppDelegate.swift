@@ -119,6 +119,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         }
         Task { await ParakeetEngine.shared.prepare() }
         UpdateChecker.shared.onAlert = { [weak self] alert in self?.model.raise(alert) }
+        UpdateChecker.shared.isRecording = { [weak self] in
+            guard let model = self?.model else { return false }
+            if case .recording = model.state { return true }
+            return false
+        }
         UpdateChecker.shared.start()
 
         // Show the main window on a normal launch. When macOS starts the app at login, stay quiet.
